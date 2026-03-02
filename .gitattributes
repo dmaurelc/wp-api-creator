@@ -21,7 +21,7 @@ docs/ export-ignore
 
 # Archivos MD (excepto README.md)
 *.md export-ignore
-!README.md
+\!README.md
 
 # Source maps
 build/*.map export-ignore
