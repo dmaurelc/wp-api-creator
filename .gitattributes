@@ -19,9 +19,11 @@ composer.lock export-ignore
 docs/ export-ignore
 .github/ export-ignore
 
-# Archivos MD (excepto README.md)
-*.md export-ignore
-\!README.md
+# Archivos MD específicos (excluidos individualmente para preservar README.md)
+DOCUMENTACION_USUARIO.md export-ignore
+ROADMAP.md export-ignore
+documentacion-plugin.md export-ignore
+docs/ export-ignore
 
 # Source maps
 build/*.map export-ignore
@@ -32,6 +34,10 @@ tests/ export-ignore
 *.spec.js export-ignore
 phpunit.xml export-ignore
 .phpunit.result.cache export-ignore
+
+# Archivos temporales de prueba
+test-cpt-meta.php export-ignore
+tmp-inspect-config.php export-ignore
 
 # Git y meta archivos
 .git/ export-ignore
