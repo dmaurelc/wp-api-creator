@@ -1,10 +1,11 @@
 <?php
 /**
  * Plugin Name: WP Custom API Creator
- * Plugin URI:  #
+ * Plugin URI:  https://webkode.cl
  * Description: Convierte WordPress en una API personalizada configurable desde un dashboard propio.
  * Version:     1.0.0
- * Author:      Daniel Maurel
+ * Author: Daniel Maurel
+ * Author URI: https://webkode.cl
  * Text Domain: wp-api-creator
  */
 
