@@ -1,0 +1,49 @@
+# Git attributes para distribución de plugin
+# Estos archivos se excluyen al hacer git-archive (para generar ZIPs)
+
+# Dependencias
+node_modules/ export-ignore
+vendor/ export-ignore
+
+# Archivos fuente de frontend (se compilan a /build/)
+src/frontend/ export-ignore
+
+# Archivos de configuración de build
+*.config.js export-ignore
+package.json export-ignore
+package-lock.json export-ignore
+composer.json export-ignore
+composer.lock export-ignore
+
+# Documentación (excepto README.md)
+docs/ export-ignore
+.github/ export-ignore
+
+# Archivos MD (excepto README.md)
+*.md export-ignore
+!README.md
+
+# Source maps
+build/*.map export-ignore
+
+# Tests
+tests/ export-ignore
+*.test.js export-ignore
+*.spec.js export-ignore
+phpunit.xml export-ignore
+.phpunit.result.cache export-ignore
+
+# Git y meta archivos
+.git/ export-ignore
+.gitignore export-ignore
+.DS_Store export-ignore
+.vscode/ export-ignore
+.idea/ export-ignore
+
+# Environment
+.env export-ignore
+.env.* export-ignore
+
+# Distignore (no necesario en distribución)
+.distignore export-ignore
+.gitattributes export-ignore

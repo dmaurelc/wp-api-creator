@@ -1,0 +1,22 @@
+{
+  "name": "danielmc/wp-api-creator",
+  "description": "Convert WordPress into a configurable custom API.",
+  "type": "wordpress-plugin",
+  "require": {
+    "php": ">=7.4"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "WpApiCreator\\": "src/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Daniel Mc",
+      "email": "daniel@example.com"
+    }
+  ]
+}

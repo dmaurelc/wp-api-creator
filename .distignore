@@ -1,0 +1,45 @@
+# Development dependencies
+node_modules/
+vendor/
+
+# Source files (frontend is compiled to /build/)
+src/frontend/
+
+# Config files
+*.config.js
+postcss.config.js
+tailwind.config.js
+webpack.config.js
+
+# Build files
+package.json
+package-lock.json
+composer.json
+composer.lock
+
+# Git & documentation
+.git/
+.gitignore
+.github/
+docs/
+*.md
+!README.md
+
+# Source maps
+build/*.map
+
+# OS & IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Tests & CI
+tests/
+*.test.js
+*.spec.js
+phpunit.xml
+.phpunit.result.cache
+
+# Environment
+.env
+.env.*

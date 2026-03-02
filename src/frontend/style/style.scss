@@ -1,0 +1,454 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === Google Fonts === */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+/* === Shadcn UI Variables (Zinc Palette) === */
+:root {
+  --background: #ffffff;
+  --foreground: #09090b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --border: #d4d4d8; /* Zinc-300 (Antes Zinc-200) */
+  --border-strong: #a1a1aa; /* Zinc-400 (Antes Zinc-300) */
+  --input: #e4e4e7;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --accent: #18181b;
+  --accent-foreground: #fafafa;
+  --accent-muted: #f4f4f5;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --ring: #18181b;
+  --radius: 0.5rem;
+
+  /* Estados adicionales */
+  --success: #10b981;
+  --success-muted: #ecfdf5;
+  --warning: #f59e0b;
+  --warning-muted: #fffbeb;
+  --info: #3b82f6;
+  --info-muted: #eff6ff;
+  --sidebar-bg: #f4f4f5; /* Zinc-100: Más notable que f8f8f8 */
+}
+
+/* === Base scope === */
+#wp-api-creator-app {
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--foreground);
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+#wp-api-creator-app *,
+#wp-api-creator-app *::before,
+#wp-api-creator-app *::after {
+  box-sizing: border-box;
+}
+
+/* ==============================
+   Botones Unificados (Shadcn Style)
+   ============================== */
+.apig-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  height: 36px;
+  padding: 0 16px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  border: 1px solid transparent;
+  gap: 8px;
+  outline: none;
+  white-space: nowrap;
+}
+
+.apig-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.apig-btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+
+.apig-btn-primary:hover:not(:disabled) {
+  background: rgba(24, 24, 27, 0.9);
+}
+
+.apig-btn-secondary {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  border-color: var(--border);
+}
+
+.apig-btn-secondary:hover:not(:disabled) {
+  background: #ebebeb;
+}
+
+.apig-btn-outline {
+  background: transparent;
+  color: var(--foreground);
+  border-color: var(--border);
+}
+
+.apig-btn-outline:hover:not(:disabled) {
+  background: var(--muted);
+}
+
+.apig-btn-ghost {
+  background: transparent;
+  border: 0;
+  color: var(--muted-foreground);
+}
+
+.apig-btn-ghost:hover:not(:disabled) {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.apig-btn-destructive {
+  background: transparent;
+  border: 0;
+  color: var(--destructive);
+}
+
+.apig-btn-destructive:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.apig-btn-sm {
+  height: 30px;
+  font-size: 12px;
+  padding: 0 12px;
+}
+
+/* ==============================
+   Animaciones Shadcn
+   ============================== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.apig-animate {
+  animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.apig-stagger {
+  animation: slideUp 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ==============================
+   Override para WP components
+   ============================== */
+
+/* ToggleControl / Switch Estilo Shadcn */
+#wp-api-creator-app .components-form-toggle {
+  width: 36px;
+  height: 20px;
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+#wp-api-creator-app .components-form-toggle .components-form-toggle__track {
+  border-radius: 999px;
+  height: 20px;
+  width: 36px;
+  background-color: #e4e4e7; /* Zinc-200 */
+  border: 0;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+#wp-api-creator-app
+  .components-form-toggle.is-checked
+  .components-form-toggle__track {
+  background: var(--primary) !important;
+}
+
+#wp-api-creator-app .components-form-toggle__thumb {
+  height: 14px;
+  width: 14px;
+  background-color: #ffffff;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transform: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  border: 0;
+  margin: 0 !important; /* Asegurar no márgenes de WP */
+}
+
+#wp-api-creator-app
+  .components-form-toggle.is-checked
+  .components-form-toggle__thumb {
+  left: 19px;
+  transform: none;
+}
+
+/* Alineación de Controles Base */
+.components-base-control__field {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0 !important;
+  width: 100%;
+}
+
+.components-toggle-control__label {
+  margin-bottom: 0 !important;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--foreground);
+  order: 1;
+}
+
+.components-form-toggle {
+  order: 2;
+  margin-left: 12px;
+}
+
+/* Base Control Styles */
+#wp-api-creator-app .components-base-control__label {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  display: block;
+}
+
+#wp-api-creator-app .components-text-control__input {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  font-size: 14px;
+  background: var(--background);
+  transition: all 0.15s ease;
+}
+
+#wp-api-creator-app .components-text-control__input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+  outline: none;
+}
+
+/* Notices */
+#wp-api-creator-app .components-notice {
+  border-radius: var(--radius);
+  margin: 0;
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+
+/* Paneles y Accordions */
+#wp-api-creator-app .components-panel__body {
+  border: none !important;
+  background: transparent !important;
+}
+
+#wp-api-creator-app .components-panel__body-title {
+  padding: 0 !important;
+  margin-bottom: 0.75rem !important;
+}
+
+#wp-api-creator-app .components-panel__body.is-opened {
+  background: var(--background) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  margin-bottom: 1.5rem !important;
+  padding: 1.5rem !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+/* ==============================
+   Layout & Sidebar explicit styles
+   ============================== */
+aside {
+  background-color: #f4f4f5 !important; /* Zinc-100 */
+  border-right: 1px solid var(--border) !important;
+  min-height: 100vh;
+}
+
+/* Sidebar Nav Links */
+.tw-space-y-1 button {
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  width: 100%;
+  text-align: left;
+  border-radius: 8px !important;
+  margin-bottom: 4px;
+}
+
+/* Active and Hover state for sidebar links */
+.tw-space-y-1 button.tw-bg-accent,
+.tw-space-y-1 button:hover {
+  background-color: #000000 !important; /* Negro puro como la foto */
+  color: #ffffff !important;
+}
+
+.tw-space-y-1 button.tw-bg-accent svg,
+.tw-space-y-1 button:hover svg {
+  color: #ffffff !important;
+}
+
+/* Section & Table Borders */
+.tw-rounded-xl.tw-border {
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  overflow: hidden !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  background-color: var(--background) !important;
+}
+
+/* Cabeceras de tablas (incluyendo WP) */
+.tw-bg-muted\/50,
+.tw-bg-card > div:first-child,
+.components-panel__body-title,
+.tw-bg-muted {
+  background-color: #f9fafb !important; /* Gris muy tenue para cabeceras */
+  border-bottom: 1px solid var(--border) !important;
+  border-top-left-radius: 12px !important;
+  border-top-right-radius: 12px !important;
+}
+
+/* Bordes entre filas */
+.tw-divide-y > * {
+  border-top: 1px solid var(--border) !important;
+}
+
+/* Forzar bordes en secciones */
+section {
+  padding-bottom: 2rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+section:last-child {
+  border-bottom: none !important;
+}
+
+/* ==============================
+   Utilidades Custom
+   ============================== */
+.apig-card {
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
+}
+
+.apig-card-hover:hover {
+  border-color: var(--muted-foreground);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: var(--background) !important;
+}
+
+.apig-row-hover:hover {
+  background-color: var(--muted) !important;
+}
+
+.apig-label-small {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--muted-foreground);
+}
+
+.apig-mono {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+}
+
+/* ==========================================================================
+   Data Schema & Method Badges Colors
+   ========================================================================== */
+
+/* Tipos de datos en el esquema */
+.tw-text-blue-500 {
+  color: #3b82f6 !important;
+} /* string */
+.tw-text-amber-500 {
+  color: #f59e0b !important;
+} /* number/integer */
+.tw-text-emerald-500 {
+  color: #10b981 !important;
+} /* boolean */
+.tw-text-purple-500 {
+  color: #a855f7 !important;
+} /* object */
+.tw-text-cyan-500 {
+  color: #06b6d4 !important;
+} /* array */
+
+/* Colores de Badges de Métodos */
+.tw-bg-success-muted\/50 {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+}
+.tw-text-success-foreground {
+  color: #059669 !important;
+}
+.tw-border-success-muted {
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.tw-bg-info-muted\/50 {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+.tw-text-info-foreground {
+  color: #2563eb !important;
+}
+.tw-border-info-muted {
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.tw-bg-destructive-muted\/50 {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+.tw-text-destructive-foreground {
+  color: #dc2626 !important;
+}
+.tw-border-destructive-muted {
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
