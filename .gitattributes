@@ -1,12 +1,20 @@
 # Git attributes para distribución de plugin
 # Estos archivos se excluyen al hacer git-archive (para generar ZIPs)
+#
+# IMPORTANTE: en .gitattributes un patrón terminado en barra ("tests/") NO excluye
+# el contenido del directorio: los atributos se resuelven por archivo. Hay que usar
+# la forma "tests/**". Verificable con:
+#   git check-attr export-ignore -- tests/bootstrap.php
 
 # Dependencias
-node_modules/ export-ignore
-vendor/ export-ignore
+node_modules export-ignore
+node_modules/** export-ignore
+vendor export-ignore
+vendor/** export-ignore
 
 # Archivos fuente de frontend (se compilan a /build/)
-src/frontend/ export-ignore
+src/frontend export-ignore
+src/frontend/** export-ignore
 
 # Archivos de configuración de build
 *.config.js export-ignore
@@ -16,40 +24,44 @@ composer.json export-ignore
 composer.lock export-ignore
 
 # Documentación (excepto README.md)
-docs/ export-ignore
-.github/ export-ignore
+docs export-ignore
+docs/** export-ignore
+.github export-ignore
+.github/** export-ignore
 
 # Archivos MD específicos (excluidos individualmente para preservar README.md)
 DOCUMENTACION_USUARIO.md export-ignore
 ROADMAP.md export-ignore
 documentacion-plugin.md export-ignore
-docs/ export-ignore
+
+# Planes de trabajo
+plans export-ignore
+plans/** export-ignore
 
 # Source maps
 build/*.map export-ignore
 
 # Tests
-tests/ export-ignore
+tests export-ignore
+tests/** export-ignore
 *.test.js export-ignore
 *.spec.js export-ignore
 phpunit.xml export-ignore
 .phpunit.result.cache export-ignore
 
-# Archivos temporales de prueba
-test-cpt-meta.php export-ignore
-tmp-inspect-config.php export-ignore
-
 # Git y meta archivos
-.git/ export-ignore
 .gitignore export-ignore
 .DS_Store export-ignore
-.vscode/ export-ignore
-.idea/ export-ignore
+.vscode export-ignore
+.vscode/** export-ignore
+.idea export-ignore
+.idea/** export-ignore
+.claude export-ignore
+.claude/** export-ignore
 
 # Environment
 .env export-ignore
 .env.* export-ignore
 
-# Distignore (no necesario en distribución)
-.distignore export-ignore
+# Meta de distribución
 .gitattributes export-ignore

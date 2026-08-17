@@ -35,13 +35,19 @@ class MediaController
     public function upload_media(WP_REST_Request $request)
     {
         
-        // Comprobación de Auth básica: Para enviar un media por API debes como minimo estar logeado.
-        // En un futuro, o si lo necesitas, podemos dejar esto público con la condición de pasar 
-        // recptchas o keys o un nonce antiCSRF.
+        // Para enviar un media por API hay que estar autenticado.
         if (!is_user_logged_in()) {
             return new WP_Error('rest_forbidden', 'Lo siento, no tienes permisos para subir archivos. Debes estar autenticado con un Token JWT correcto o Cookie del sistema.', ['status' => 401]);
         }
-        
+
+        // Estar autenticado no basta: escribir en wp-content/uploads exige la misma
+        // capacidad que WordPress pide en el escritorio. Sin esto, una API Key de un
+        // suscriptor podria subir archivos que ese usuario no puede subir desde wp-admin.
+        if (!current_user_can('upload_files')) {
+            return new WP_Error('rest_forbidden', 'Tu usuario no tiene la capacidad `upload_files` necesaria para subir archivos.', ['status' => 403]);
+        }
+
+
         // Verificamos si en $_FILES se ha recibido algo esperado
         $files = $request->get_file_params();
 

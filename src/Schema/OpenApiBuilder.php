@@ -283,7 +283,12 @@ class OpenApiBuilder
         return [
             ['name' => 'page', 'in' => 'query', 'schema' => ['type' => 'integer', 'default' => 1]],
             ['name' => 'limit', 'in' => 'query', 'schema' => ['type' => 'integer', 'default' => 10]],
-            ['name' => '_include', 'in' => 'query', 'schema' => ['type' => 'string'], 'description' => 'Relaciones embebidas (comma separated)']
+            [
+                'name'        => 'status',
+                'in'          => 'query',
+                'schema'      => ['type' => 'string', 'enum' => \WpApiCreator\Domain\Repositories\DynamicQueryBuilder::ALLOWED_STATUSES, 'default' => 'publish'],
+                'description' => __('Estado de las entradas. Los estados no públicos exigen capacidades sobre el tipo de contenido.', 'wp-api-creator')
+            ]
         ];
     }
 

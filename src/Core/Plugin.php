@@ -2,6 +2,9 @@
 
 namespace WpApiCreator\Core;
 
+use WpApiCreator\Auth\TokenVersionStore;
+use WpApiCreator\Domain\ConfigMigrator;
+
 /**
  * Clase principal que inicializa el ciclo de vida del plugin.
  */
@@ -23,6 +26,10 @@ class Plugin
      */
     public function init(): void
     {
+        // La migración de esquema corre antes que nada: el Router lee la configuración
+        // en su constructor y debe ver ya la forma definitiva.
+        $this->maybe_upgrade();
+
         // Aquí conectamos módulos como Admin, Api, Auth, etc.
         // Registramos las rutas dinámicas resolviendo desde el contenedor.
         $this->container->get(\WpApiCreator\Api\Router::class)->register_hooks();
@@ -34,8 +41,76 @@ class Plugin
         
         // Admin API interactúa por REST API, independiente de is_admin()
         $this->container->get(\WpApiCreator\Admin\AdminApi::class)->register_hooks();
-        
+
+        $this->register_token_invalidation_hooks();
+
         add_action('init', [$this, 'on_wp_init']);
+    }
+
+    /**
+     * Eventos que deben invalidar los tokens vivos de un usuario.
+     *
+     * @return void
+     */
+    protected function register_token_invalidation_hooks(): void
+    {
+        add_action('after_password_reset', function ($user) {
+            if (is_object($user) && isset($user->ID)) {
+                TokenVersionStore::revoke((int) $user->ID);
+            }
+        }, 10, 1);
+
+        add_action('wp_set_password', function ($password, $user_id) {
+            TokenVersionStore::revoke((int) $user_id);
+        }, 10, 2);
+
+        add_action('set_user_role', function ($user_id) {
+            TokenVersionStore::revoke((int) $user_id);
+        }, 10, 1);
+
+        add_action('delete_user', function ($user_id) {
+            TokenVersionStore::revoke((int) $user_id);
+        }, 10, 1);
+
+        // `profile_update` se dispara en cada guardado del perfil. Sin comparar el hash de
+        // contrasena, cambiar una biografia cerraria todas las sesiones del usuario.
+        add_action('profile_update', function ($user_id, $old_user_data) {
+            $new_user_data = get_userdata((int) $user_id);
+
+            if (!$new_user_data || !is_object($old_user_data)) {
+                return;
+            }
+
+            if ($old_user_data->user_pass !== $new_user_data->user_pass) {
+                TokenVersionStore::revoke((int) $user_id);
+            }
+        }, 10, 2);
+    }
+
+    /**
+     * Ejecuta la migracion de esquema una sola vez, fuera del path de request de la API.
+     *
+     * @return void
+     */
+    protected function maybe_upgrade(): void
+    {
+        $is_management_context = is_admin()
+            || (defined('WP_CLI') && WP_CLI)
+            || wp_doing_cron();
+
+        if (!$is_management_context) {
+            return;
+        }
+
+        ConfigMigrator::maybe_upgrade(self::version());
+    }
+
+    /**
+     * @return string
+     */
+    protected static function version(): string
+    {
+        return defined('WP_API_CREATOR_VERSION') ? (string) WP_API_CREATOR_VERSION : '0.0.0';
     }
 
     /**
@@ -78,8 +153,9 @@ class Plugin
      */
     public static function activate(): void
     {
-        // Crear roles iniciales, opciones por defecto, tablas de bd, etc.
-        
+        // Backup del option, consolidacion de API Keys y siembra de versiones de token.
+        ConfigMigrator::maybe_upgrade(self::version());
+
         // Es necesario hacer flush rules al activar tipos de post nuevos o rutas nuevas.
         flush_rewrite_rules();
     }

@@ -30,5 +30,11 @@ yarn-error.log*
 *.tmp
 .cache/
 
+# Resultado de la última ejecución de PHPUnit
+.phpunit.result.cache
+
+# Memoria local de agentes
+.claude/agent-memory/
+
 # Distribution ZIP (generated via npm run zip, attached to releases)
 *.zip

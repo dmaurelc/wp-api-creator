@@ -42,9 +42,9 @@ class CollectionController
 
         // Extraer sanitizaciones configuradas por el Router
         $args = [
-            'page'  => $request->get_param('page'),
-            'limit' => $request->get_param('limit'),
-            '_include' => $request->get_param('_include') // TODO: Para cargar relaciones anidadas POST-Serializer
+            'page'   => $request->get_param('page'),
+            'limit'  => $request->get_param('limit'),
+            'status' => $request->get_param('status'),
         ];
 
         // 1. Obtener resultado paginado desde nuestra Capa de Dominio Desacoplada

@@ -284,11 +284,14 @@ El plugin soporta tres métodos principales para interactuar con la API:
 
 ### A. API Keys (Recomendado para Integraciones Externas)
 
-1. Ve a **Ajustes > Gestión de API Keys**.
-2. Genera una nueva clave y dale un nombre.
-3. Incluye la clave en tus peticiones HTTP usando el header:
+1. Ve a **Autenticación > API Keys**.
+2. Elige el **usuario de WordPress** al que se asociará la clave, ponle un nombre y, si quieres, una fecha de caducidad.
+3. Copia la clave en el momento de crearla: **solo se muestra una vez**. El plugin guarda únicamente su hash, así que no hay forma de recuperarla después.
+4. Incluye la clave en tus peticiones HTTP usando el header:
    `X-API-Key: tu_clave_generada`
-4. **Seguridad**: Estas claves mapean permisos al primer usuario administrador del sitio por defecto.
+5. **Seguridad**: la clave hereda los permisos del usuario asociado. Usa una cuenta con el rol mínimo que necesite la integración; no hay ningún mapeo automático al administrador.
+
+> Las claves creadas con versiones anteriores a la 1.1.0 aparecen marcadas como obsoletas y no autentican. Crea una nueva para cada integración.
 
 ### B. Application Passwords (Nativo de WordPress)
 
@@ -298,9 +301,18 @@ El plugin soporta tres métodos principales para interactuar con la API:
 
 ### C. JWT (JSON Web Tokens)
 
-- Compatible con plugins estándar de JWT para WordPress.
 - Ideal para aplicaciones móviles o SPAs donde el usuario debe loguearse.
+- Obtén el token con `POST /{namespace}/auth/token` enviando `username` y `password`.
 - Header: `Authorization: Bearer [token]`
+- La duración se configura en **Autenticación > JWT**. Desde esa misma pestaña un administrador puede revocar de golpe todos los tokens activos de un usuario.
+- Los tokens se invalidan solos al cambiar la contraseña o el rol del usuario.
+- Tras actualizar a 1.1.0, los tokens emitidos con versiones anteriores dejan de ser válidos y los clientes deben volver a autenticarse.
+
+### D. Cerrar tu API
+
+En **Ajustes > Seguridad**, la opción *Exigir credencial en tu namespace* hace que cualquier petición a tus rutas sin credencial válida reciba un 401, incluso en endpoints marcados como públicos, y cierra también la documentación en `/docs`. Está desactivada por defecto: actívala solo cuando tengas creada al menos una API Key operativa.
+
+No alcanza a los endpoints nativos de WordPress (`/wp-json/wp/v2/...`): los registra WordPress y quedan fuera del control de este plugin.
 
 ---
 

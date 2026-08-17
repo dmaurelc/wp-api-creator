@@ -19,6 +19,7 @@ use WpApiCreator\Auth\JwtProvider;
 use WpApiCreator\Auth\ApiKeyProvider;
 use WpApiCreator\Media\MediaUploader;
 use WpApiCreator\Domain\Logger;
+use WpApiCreator\Admin\AdminApi;
 
 class Router
 {
@@ -121,15 +122,112 @@ class Router
     }
 
     /**
+     * Rutas que nunca reciben un 401 por una credencial previa fallida.
+     *
+     * Contiene solo `auth/token`: un cliente cuyo token caduco envia la renovacion con
+     * el Bearer viejo todavia adjunto, y sin esta exencion quedaria bloqueado justo en
+     * el unico endpoint que podria desbloquearlo.
+     */
+    const EXEMPT_ROUTES = ['auth/token'];
+
+    /**
      * Corre el middleware de autenticación (JWT & API Keys) interceptando cada request al namespace.
+     *
+     * @param mixed            $result  Respuesta ya resuelta por otro filtro, o null.
+     * @param \WP_REST_Server  $server
+     * @param WP_REST_Request  $request
+     * @return mixed
      */
     public function run_auth_middleware($result, $server, $request)
     {
-        // Solo nos interesa interceptar si cae en las rutas de nuestro propio plugin
-        if (strpos($request->get_route(), '/' . $this->namespace) === 0) {
-            $this->auth_middleware->authenticate_request($request);
+        // (1) Otro plugin ya resolvio la peticion: devolverla intacta.
+        if (null !== $result) {
+            return $result;
         }
-        return $result; // Pass-through
+
+        $route = $request->get_route();
+
+        // (2) Las rutas de administracion viven en su propio namespace fijo y se protegen
+        // con capacidades. Interceptarlas permitiria suplantar un usuario via cabecera
+        // antes de que corra su permission_callback si alguien configurase el namespace
+        // publico con ese mismo valor.
+        if (strpos($route, '/' . AdminApi::ROUTE_NAMESPACE . '/') === 0) {
+            return $result;
+        }
+
+        if (!$this->route_belongs_to_namespace($route)) {
+            return $result;
+        }
+
+        // (3) WordPress engancha `rest_handle_options_request` a este mismo filtro. Los
+        // preflight CORS nunca llevan cabeceras personalizadas como X-API-Key, asi que un
+        // 401 aqui rompe toda integracion desde navegador con un error de CORS opaco.
+        if ('OPTIONS' === $request->get_method()) {
+            return $result;
+        }
+
+        $this->auth_middleware->authenticate_request($request);
+
+        if (in_array($this->get_relative_route($route), self::EXEMPT_ROUTES, true)) {
+            return $result;
+        }
+
+        // (4) Si llego una credencial y fallo, responder el motivo real en lugar de dejar
+        // que el Gatekeeper emita un 401 generico sin diagnostico.
+        $auth_error = AuthMiddleware::get_error($request);
+        if ($auth_error && !is_user_logged_in()) {
+            return $auth_error;
+        }
+
+        // (5) Enforcement de `require_api_key`. Core evalua `! empty($result)`, de modo que
+        // devolver false, [] o 0 no cortocircuitaria: hace falta un WP_Error.
+        $settings = ConfigBuilder::get_global_settings();
+        if (!empty($settings['require_api_key']) && !is_user_logged_in()) {
+            return new \WP_Error(
+                'api_key_required',
+                'Esta API exige una credencial válida. Envía tu API Key en la cabecera X-API-Key o un token Bearer.',
+                ['status' => 401]
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Comprueba si una ruta pertenece al namespace configurado comparando segmento a segmento.
+     *
+     * Una comparacion por prefijo daria por buenas rutas de namespaces distintos que
+     * empiecen igual (por ejemplo `mi-api/v10` cuando el configurado es `mi-api/v1`).
+     *
+     * @param string $route
+     * @return bool
+     */
+    protected function route_belongs_to_namespace(string $route): bool
+    {
+        $route_parts     = explode('/', trim($route, '/'));
+        $namespace_parts = explode('/', trim($this->namespace, '/'));
+
+        foreach ($namespace_parts as $index => $segment) {
+            if (($route_parts[$index] ?? null) !== $segment) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Devuelve la ruta sin el prefijo de namespace, para comparaciones exactas.
+     *
+     * @param string $route
+     * @return string
+     */
+    protected function get_relative_route(string $route): string
+    {
+        $namespace_depth = count(explode('/', trim($this->namespace, '/')));
+        $route_parts     = explode('/', trim($route, '/'));
+
+        return implode('/', array_slice($route_parts, $namespace_depth));
     }
 
     /**
@@ -140,7 +238,7 @@ class Router
         $route = $request->get_route();
         
         // Solo registrar los logs en el namespace de la API (evitar spam de core WP)
-        if (strpos($route, '/' . $this->namespace) === 0 && strpos($route, '/admin') === false) {
+        if ($this->route_belongs_to_namespace($route) && strpos($route, '/admin') === false) {
             $method = $request->get_method();
             $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
             
@@ -370,10 +468,12 @@ class Router
                 'default' => 10,
                 'sanitize_callback' => 'absint',
             ],
-            '_include' => [
+            'status' => [
                 'type' => 'string',
-                'description' => 'Relaciones a incrustar separadas por coma.',
-            ]
+                'default' => 'publish',
+                'enum' => DynamicQueryBuilder::ALLOWED_STATUSES,
+                'description' => 'Estado de las entradas. Los estados no públicos exigen capacidades sobre el tipo de contenido.',
+            ],
         ];
     }
 }

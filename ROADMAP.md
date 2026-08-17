@@ -38,13 +38,20 @@ Barrera de acceso granular implementada.
 - [x] Validaciones granulares a nivel de campo (Implementado hoy en Serializer).
 - [x] Validaciones de Ownership.
 
-## Fase 4: Autenticación Multi-Proveedor 🟡 (En Refinamiento)
+## Fase 4: Autenticación Multi-Proveedor ✅ (Cerrada en 1.1.0)
+
+La firma HS256 nunca estuvo pendiente de validación: estaba correctamente implementada desde el principio (`hash_equals`, comprobación de `nbf`, `exp` y formato). Lo que faltaba eran los controles alrededor, y eso es lo que cierra 1.1.0.
 
 - [x] Middleware Pipeline Architecture.
-- [x] Proveedor de API Keys (Gestión múltiple en UI completa hoy).
+- [x] Proveedor de API Keys ligadas a un usuario real, hasheadas con SHA-256, con caducidad y registro de último uso.
 - [x] Endpoints de Generación de Tokens (POST /v1/auth/token).
-- [ ] Proveedor JWT (Estructura base lista, pendiente pruebas finales de firma).
-- [ ] Sistema de caducidad estricta.
+- [x] Proveedor JWT con validación de emisor, versión de token y existencia del usuario.
+- [x] Caducidad configurable de verdad (`jwt_expiration`), antes fijada a 24 h en el código.
+- [x] Revocación por usuario, manual desde el dashboard y automática al cambiar contraseña o rol.
+- [x] Eliminación del secreto de firma por defecto escrito en el código y de la clave maestra de desarrollo.
+- [x] Enforcement real de `require_api_key`, con su interruptor en la interfaz.
+- [x] Limitación de intentos fallidos por IP y por cuenta.
+- [x] Suite de tests unitarios (PHPUnit + Brain Monkey).
 
 ## Fase 5: Ingesta de Medios Avanzada ✅
 
@@ -75,4 +82,16 @@ Interfaz visual reactiva para la gestión total.
 
 ---
 
-**Próximos objetivos prioritarios:** Validar el sistema JWT completo (Fase 4) y preparar documentación final de usuario.
+## Deuda conocida
+
+Registrada con ubicación exacta en `docs/08_seguridad_rendimiento_escalabilidad.md`:
+
+- [ ] Clave de caché de `Gatekeeper::$field_auth_cache` sin la configuración del endpoint. **Bloqueante para el refactor de inyección de dependencias.**
+- [ ] Swagger UI carga scripts de `unpkg.com` sin SRI.
+- [ ] `OutputSerializer::$field_mappings` es estático y nunca se invalida.
+
+Fuera de alcance por decisión explícita: refresh tokens y `/auth/refresh`, lista negra de `jti`, scopes por API Key, suite de integración con `wp-env` y el refactor de inyección de dependencias.
+
+---
+
+**Próximos objetivos prioritarios:** Suite de integración sobre un WordPress real y saldar la deuda conocida antes de abordar el refactor de inyección de dependencias.

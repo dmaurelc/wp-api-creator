@@ -58,7 +58,34 @@ Todo esto forma parte de la cadena de enrutamiento:
 4. Indagación en options en caché para "casas". Retorna permisos del agente.
 5. Autorizado -> Siguiente capa (Controller de la BD).
 
-## 4. Extendibilidad y Filtros Custom
+## 4. Identidad resuelta por credencial
+
+El Gatekeeper evalúa siempre al usuario que dejó `wp_set_current_user()` en memoria. De dónde sale esa identidad depende de la credencial:
+
+| Credencial | Identidad resultante |
+|---|---|
+| Cookie de WordPress | El usuario de la sesión |
+| `X-API-Key` | El usuario al que se asoció la key al crearla |
+| `Authorization: Basic` | El propietario de la Application Password |
+| `Authorization: Bearer` | El `user_id` del payload del token |
+
+**Las API Keys heredan el rol de su propietario.** No tienen scopes propios: para acotar lo que puede hacer una integración, se le asigna una cuenta con el rol mínimo necesario. Una key de un `subscriber` recibe exactamente los mismos 403 que ese usuario recibiría con cookie.
+
+## 5. Estado de las entradas en colecciones
+
+`GET /{namespace}/{recurso}` acepta el parámetro `status`, restringido a `publish`, `draft`, `pending` y `private`. Cualquier otro valor cae a `publish`.
+
+`WP_Query` no aplica ningún filtro de propiedad por sí mismo, así que el estado pedido se contrasta contra las capacidades del usuario, mapeadas al objeto `cap` del CPT:
+
+| Estado pedido | Requisito |
+|---|---|
+| `publish` | Ninguno |
+| `draft`, `pending` | `edit_others_posts` del CPT; sin ella se fuerza `author__in` al usuario actual |
+| `private` | `read_private_posts` del CPT |
+
+Un invitado nunca obtiene entradas no publicadas. Un `author` que pida `?status=draft` recibe solo sus propios borradores: comprobar `edit_posts` no serviría, porque el rol `author` la tiene de serie y devolvería los borradores de todos los autores.
+
+## 6. Extendibilidad y Filtros Custom
 
 Todo el proceso de toma de decisiones está forrado de filtros y action hooks. Un desarrollador podrá añadir condicionales lógicas extremas no cubiertas por interfaz gráfica.
 

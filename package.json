@@ -1,6 +1,6 @@
 {
   "name": "wp-api-creator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Dashboard SPA for WP Custom API Creator plugin.",
   "scripts": {
     "build": "wp-scripts build src/frontend/index.js --output-path=build",

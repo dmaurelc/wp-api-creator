@@ -10,6 +10,8 @@ use WP_Query;
  */
 class DynamicQueryBuilder
 {
+    /** Estados que un cliente puede pedir. Cualquier otro valor cae a `publish`. */
+    const ALLOWED_STATUSES = ['publish', 'draft', 'pending', 'private'];
 
     /**
      * Construye y ejecuta un WP_Query basándose en los argumentos de la solicitud y el config del CPT.
@@ -26,12 +28,34 @@ class DynamicQueryBuilder
         // Bloqueo de seguridad preventivo sobre grandes peticiones para evitar memory limits
         if ($limit > 100) $limit = 100;
 
+        $status = isset($args['status']) ? (string) $args['status'] : 'publish';
+        if (!in_array($status, self::ALLOWED_STATUSES, true)) {
+            $status = 'publish';
+        }
+
         $query_args = [
             'post_type'      => $post_type,
-            'post_status'    => 'publish', // Provisional. Iteraremos states más adelante basados en auth
+            'post_status'    => $status,
             'posts_per_page' => $limit,
             'paged'          => $page,
         ];
+
+        // El estado solicitado se contrasta contra las capacidades del usuario. WP_Query no
+        // aplica ningun filtro de propiedad por si mismo: sin esto, pedir `?status=draft`
+        // devolveria los borradores de todos los autores.
+        $query_args = $this->apply_status_capabilities($query_args, $post_type, $status);
+
+        if ($query_args === null) {
+            return [
+                'posts' => [],
+                'meta'  => [
+                    'total_items'  => 0,
+                    'total_pages'  => 0,
+                    'current_page' => $page,
+                    'limit'        => $limit,
+                ]
+            ];
+        }
 
         // Mapeo dinámico de orderby
         if (!empty($args['orderby'])) {
@@ -70,6 +94,67 @@ class DynamicQueryBuilder
                 'limit'        => $limit
             ]
         ];
+    }
+
+    /**
+     * Ajusta la consulta segun las capacidades que exige el estado solicitado.
+     *
+     * | Estado pedido     | Requisito                                                        |
+     * |-------------------|------------------------------------------------------------------|
+     * | publish           | ninguno                                                          |
+     * | draft, pending    | `edit_others_posts` del CPT, o se fuerza `author__in` al usuario  |
+     * | private           | `read_private_posts` del CPT                                     |
+     *
+     * @param array  $query_args
+     * @param string $post_type
+     * @param string $status
+     * @return array|null Null cuando el usuario no puede ver ese estado en absoluto.
+     */
+    protected function apply_status_capabilities(array $query_args, string $post_type, string $status): ?array
+    {
+        if ($status === 'publish') {
+            return $query_args;
+        }
+
+        if (!is_user_logged_in()) {
+            return null;
+        }
+
+        if ($status === 'private') {
+            return current_user_can($this->map_capability($post_type, 'read_private_posts'))
+                ? $query_args
+                : null;
+        }
+
+        // draft y pending
+        if (current_user_can($this->map_capability($post_type, 'edit_others_posts'))) {
+            return $query_args;
+        }
+
+        // Sin capacidad sobre contenido ajeno solo se devuelve lo propio.
+        // `edit_posts` no basta como comprobacion: el rol `author` la tiene de serie y
+        // recibiria los borradores de todos los autores.
+        $query_args['author__in'] = [get_current_user_id()];
+
+        return $query_args;
+    }
+
+    /**
+     * Traduce una capacidad generica a la que declara el CPT, si la define.
+     *
+     * @param string $post_type
+     * @param string $capability
+     * @return string
+     */
+    protected function map_capability(string $post_type, string $capability): string
+    {
+        $post_type_object = get_post_type_object($post_type);
+
+        if ($post_type_object && isset($post_type_object->cap->$capability)) {
+            return (string) $post_type_object->cap->$capability;
+        }
+
+        return $capability;
     }
 
     /**

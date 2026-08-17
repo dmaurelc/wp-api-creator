@@ -6,17 +6,32 @@
     "php": ">=7.4"
   },
   "require-dev": {
-    "phpunit/phpunit": "^9.5"
+    "phpunit/phpunit": "^9.5",
+    "brain/monkey": "^2.6",
+    "mockery/mockery": "^1.6"
   },
   "autoload": {
     "psr-4": {
       "WpApiCreator\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "WpApiCreator\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit"
+  },
+  "config": {
+    "allow-plugins": {
+      "php-http/discovery": false
+    }
+  },
   "authors": [
     {
-      "name": "Daniel Mc",
-      "email": "daniel@example.com"
+      "name": "Daniel Maurel",
+      "email": "dmaurelc@gmail.com"
     }
   ]
 }

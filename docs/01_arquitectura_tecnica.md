@@ -59,6 +59,25 @@ Cada directorio del `/src` debe ser en su mayoría autónomo.
 - **`/Api`** NO sabe cómo funciona la generación del Token, solo le pregunta a `/Auth` si un Request es válido.
 - **`/Schema`** (Swagger) es simplemente un "Observador" de la configuración maestra. Lee la configuración dictada por el admin (CPTs activos, campos expuestos) y mapea esto a sintaxis Swagger 3.0.
 
+### Regla dura: escritura de configuración
+
+`ConfigBuilder::save_config()` es **exclusivo del contexto de administración y de la rutina de migración**. Ninguna ruta del path de request — nada bajo `src/Api/` ni `src/Auth/` — puede invocarlo.
+
+El motivo: la lectura de configuración está cacheada hasta 5 minutos en tres niveles (estática, object cache, base de datos). Un read-modify-write desde una petición partiría de un documento potencialmente obsoleto y reescribiría endpoints, permisos y ajustes con valores viejos, revirtiendo en silencio cambios que un administrador acaba de guardar.
+
+Lo que un endpoint necesite escribir va a su propia option, con `autoload = no`:
+
+| Dato | Option |
+|---|---|
+| Último uso de cada API Key | `wp_api_creator_key_usage` |
+| Secreto de firma JWT autogenerado | `wp_api_creator_jwt_secret` |
+| Contadores de intentos fallidos | Transients `wpac_fail_*` |
+| Versión de token por usuario | Meta de usuario `_wpac_token_version` |
+
+Verificable con `grep -rn "save_config" src/Api/ src/Auth/`, que debe devolver vacío.
+
+Por el mismo motivo, la ubicación canónica de las API Keys es `$config['api_keys']` — la raíz del option — y no `$config['settings']`: ese subárbol lo reemplaza el dashboard al guardar.
+
 ## 4. Lifecycle Completo de una Petición Externa
 
 Cuando un request llega desde una aplicación frontend a `/wp-custom-api/v1/propiedades`:

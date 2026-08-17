@@ -33,19 +33,22 @@ class ApplicationPasswordProvider
 
         list($username, $password) = explode(':', $credentials, 2);
 
-        $user = get_user_by('login', $username);
-
-        if (!$user) {
-            return new WP_Error('invalid_username', 'El usuario proporcionado no existe.', ['status' => 401]);
-        }
-
         // Usamos la función nativa de WordPress para validar App Passwords
         $validated_user = wp_authenticate_application_password(null, $username, $password);
 
-        if (is_wp_error($validated_user)) {
-             return new WP_Error('invalid_app_password', 'La Contraseña de Aplicación proporcionada es incorrecta o ha sido revocada.', ['status' => 401]);
+        // `wp_authenticate_application_password()` devuelve su primer argumento sin tocarlo
+        // — aqui null, NO un WP_Error — en varias salidas tempranas: cuando el sitio no tiene
+        // ninguna Application Password creada (`WP_Application_Passwords::is_in_use()`), y
+        // cuando el filtro `application_password_is_api_request` decide que la peticion no
+        // aplica. Comprobar solo `is_wp_error()` trataria esas salidas como exito y
+        // autenticaria con cualquier contrasena conociendo unicamente el nombre de usuario.
+        // Solo una instancia de WP_User acredita credenciales validas.
+        if (!($validated_user instanceof \WP_User)) {
+            return new WP_Error('invalid_app_password', 'La Contraseña de Aplicación proporcionada es incorrecta, ha sido revocada o no está habilitada en este sitio.', ['status' => 401]);
         }
 
-        return $user->ID;
+        // Se devuelve el ID resuelto por WordPress y no el de una busqueda propia por login:
+        // core tambien acepta el correo electronico como identificador, y ambos pueden diferir.
+        return (int) $validated_user->ID;
     }
 }

@@ -136,19 +136,26 @@ function App() {
 
   const handleUpdateSettings = useCallback(
     async (newSettings) => {
-      try {
-        const response = await apiFetch({
-          path: "/creator/v1/admin/settings",
-          method: "POST",
-          data: { settings: newSettings },
-        });
-        if (response.success) {
-          setSettings(newSettings);
-          loadSidebarInfo();
-        }
-      } catch (error) {
-        console.error("Error updating settings:", error);
+      // El error se propaga a quien llama: tragárselo aquí hacía que las vistas
+      // confirmasen como guardado un cambio que el servidor había rechazado.
+      const response = await apiFetch({
+        path: "/creator/v1/admin/settings",
+        method: "POST",
+        data: { settings: newSettings },
+      });
+
+      if (!response.success) {
+        throw new Error(
+          response.message ||
+            __("El servidor no pudo guardar la configuración.", "wp-api-creator"),
+        );
       }
+
+      // Se adopta la respuesta saneada del servidor, no el payload enviado.
+      setSettings(response.data || newSettings);
+      loadSidebarInfo();
+
+      return response;
     },
     [loadSidebarInfo],
   );
@@ -193,7 +200,7 @@ function App() {
                 API Creator
               </h1>
               <span className="tw-text-xs tw-text-muted-foreground tw-font-medium">
-                v1.0.0
+                v{window.wpApiCreatorData?.version || "—"}
               </span>
             </div>
           </div>

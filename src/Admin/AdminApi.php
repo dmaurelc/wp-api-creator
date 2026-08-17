@@ -14,8 +14,14 @@ use WpApiCreator\Domain\Logger;
  */
 class AdminApi
 {
+    /**
+     * Namespace fijo de las rutas de administracion, distinto del namespace publico
+     * configurable. El Router lo excluye de su middleware para que una configuracion
+     * que apuntase aqui no permitiese suplantar un usuario via cabecera.
+     */
+    const ROUTE_NAMESPACE = 'creator/v1';
 
-    protected $namespace = 'creator/v1';
+    protected $namespace = self::ROUTE_NAMESPACE;
 
     public function register_hooks()
     {
@@ -61,34 +67,19 @@ class AdminApi
         register_rest_route($this->namespace, '/docs/openapi.json', [
             'methods'  => WP_REST_Server::READABLE,
             'callback' => [$this, 'get_openapi_json'],
-            'permission_callback' => '__return_true'
+            'permission_callback' => [$this, 'check_docs_permissions']
         ]);
 
         // Swagger UI
         register_rest_route($this->namespace, '/docs', [
             'methods'  => WP_REST_Server::READABLE,
             'callback' => [$this, 'get_swagger_ui'],
-            'permission_callback' => '__return_true'
+            'permission_callback' => [$this, 'check_docs_permissions']
         ]);
 
-        // API Keys management
-        register_rest_route($this->namespace, '/admin/api-keys', [
-            'methods'  => WP_REST_Server::READABLE,
-            'callback' => [$this, 'get_api_keys'],
-            'permission_callback' => [$this, 'check_admin_permissions']
-        ]);
-
-        register_rest_route($this->namespace, '/admin/api-keys', [
-            'methods'  => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'create_api_key'],
-            'permission_callback' => [$this, 'check_admin_permissions']
-        ]);
-
-        register_rest_route($this->namespace, '/admin/api-keys/(?P<id>[\w]+)', [
-            'methods'  => WP_REST_Server::DELETABLE,
-            'callback' => [$this, 'delete_api_key'],
-            'permission_callback' => [$this, 'check_admin_permissions']
-        ]);
+        // API Keys y usuarios: modulos propios
+        (new ApiKeysAdminController())->register_routes($this->namespace);
+        (new UsersAdminController())->register_routes($this->namespace);
 
         // Logs
         register_rest_route($this->namespace, '/admin/logs', [
@@ -165,6 +156,35 @@ class AdminApi
         return current_user_can('manage_options');
     }
 
+    /**
+     * Acceso a la documentacion generada.
+     *
+     * Con `require_api_key` desactivado la documentacion sigue siendo publica, como hasta
+     * ahora. Al activarlo pasa a exigir credencial: el esquema describe los CPT expuestos,
+     * sus campos y parametros, y publicarlo abiertamente equivaldria a entregar el mapa
+     * completo de una API que el administrador cree cerrada.
+     *
+     * @return bool
+     */
+    public function check_docs_permissions()
+    {
+        $settings = ConfigBuilder::get_global_settings();
+
+        if (empty($settings['require_api_key'])) {
+            return true;
+        }
+
+        // Las rutas de administracion quedan fuera del middleware del Router, asi que la
+        // credencial se resuelve aqui explicitamente.
+        if (is_user_logged_in()) {
+            return true;
+        }
+
+        $api_key = $_SERVER['HTTP_X_API_KEY'] ?? '';
+
+        return $api_key !== '' && (new \WpApiCreator\Auth\ApiKeyProvider())->validate_key((string) $api_key) !== null;
+    }
+
     public function get_endpoints(WP_REST_Request $request)
     {
         $endpoints = ConfigBuilder::get_active_endpoints();
@@ -185,6 +205,9 @@ class AdminApi
         }
 
         $config = get_option(ConfigBuilder::OPTION_KEY, []);
+        if (!is_array($config)) {
+            $config = [];
+        }
         $config['endpoints'] = $data['endpoints'];
         $saved = ConfigBuilder::save_config($config);
 
@@ -222,14 +245,28 @@ class AdminApi
         }
 
         $config = get_option(ConfigBuilder::OPTION_KEY, []);
-        $config['settings'] = $data['settings'];
+        if (!is_array($config)) {
+            $config = [];
+        }
+
+        $existing = isset($config['settings']) && is_array($config['settings']) ? $config['settings'] : [];
+
+        // Fusion sobre lo existente y filtrado por whitelist: las claves ausentes del
+        // payload conservan su valor y las desconocidas no se persisten.
+        $sanitized = SettingsSanitizer::sanitize($data['settings'], $existing);
+        if (is_wp_error($sanitized)) {
+            return $sanitized;
+        }
+
+        $config['settings'] = $sanitized;
         $saved = ConfigBuilder::save_config($config);
 
         if ($saved) {
             delete_option(\WpApiCreator\Schema\OpenApiBuilder::CACHE_OPTION_KEY);
             return new WP_REST_Response([
                 'success' => true,
-                'message' => __('Ajustes globales guardados correctamente', 'wp-api-creator')
+                'message' => __('Ajustes globales guardados correctamente', 'wp-api-creator'),
+                'data'    => ConfigBuilder::get_global_settings()
             ], 200);
         }
 
@@ -291,7 +328,7 @@ class AdminApi
 
     public function get_swagger_ui(WP_REST_Request $request)
     {
-        $json_url = rest_url('/creator/v1/docs/openapi.json');
+        $json_url = rest_url('/' . self::ROUTE_NAMESPACE . '/docs/openapi.json');
         $html = <<<HTML
 <!DOCTYPE html>
 <html lang="en">
@@ -323,41 +360,6 @@ HTML;
         header('Content-Type: text/html; charset=UTF-8');
         echo $html;
         exit;
-    }
-
-    public function get_api_keys()
-    {
-        $config = get_option(ConfigBuilder::OPTION_KEY, []);
-        return new WP_REST_Response(['success' => true, 'keys' => $config['api_keys'] ?? []], 200);
-    }
-
-    public function create_api_key(WP_REST_Request $request)
-    {
-        $name = $request->get_param('name') ?: 'Nueva API Key';
-        $config = get_option(ConfigBuilder::OPTION_KEY, []);
-        if (!isset($config['api_keys'])) $config['api_keys'] = [];
-        $new_key = [
-            'id'    => uniqid(),
-            'name'  => $name,
-            'key'   => 'ak_' . bin2hex(random_bytes(16)),
-            'created_at' => current_time('mysql')
-        ];
-        $config['api_keys'][] = $new_key;
-        ConfigBuilder::save_config($config);
-        return new WP_REST_Response(['success' => true, 'key' => $new_key], 200);
-    }
-
-    public function delete_api_key(WP_REST_Request $request)
-    {
-        $id = $request->get_param('id');
-        $config = get_option(ConfigBuilder::OPTION_KEY, []);
-        if (isset($config['api_keys'])) {
-            $config['api_keys'] = array_filter($config['api_keys'], function($key) use ($id) {
-                return $key['id'] !== $id;
-            });
-            ConfigBuilder::save_config($config);
-        }
-        return new WP_REST_Response(['success' => true], 200);
     }
 
     public function flush_cache(WP_REST_Request $request)
@@ -493,6 +495,9 @@ HTML;
         }
 
         $config = get_option(ConfigBuilder::OPTION_KEY, []);
+        if (!is_array($config)) {
+            $config = [];
+        }
         $config['global_routes'] = $data['visible_routes'];
         ConfigBuilder::save_config($config);
 

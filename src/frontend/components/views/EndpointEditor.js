@@ -251,8 +251,11 @@ function EndpointEditor({ endpoint, isGlobal = false, onSave, onCancel }) {
 
     apiFetch({ path: "/creator/v1/admin/settings" })
       .then(function (res) {
-        if (res && res.api_namespace) {
-          setApiNamespace(res.api_namespace);
+        // El endpoint responde {success, data:{...}}: leer `res.api_namespace`
+        // devolvía siempre undefined y la vista previa de la URL se quedaba en el
+        // valor de reserva, mostrando un namespace que no era el configurado.
+        if (res && res.data && res.data.api_namespace) {
+          setApiNamespace(res.data.api_namespace);
         }
       })
       .catch(function () {});

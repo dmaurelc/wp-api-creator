@@ -56,11 +56,23 @@ Ideal para implementaciones de UI de Front-end en SPA donde deseas un ciclo de v
 
 - **Header**: `Authorization: Bearer <tu_jwt_token>`
 
-### C) API Keys Globales (Elegado)
+### C) API Keys
 
-Pensada para servidores B2B fijos que solo necesitan enviar y recibir data a un CPT.
+Pensadas para servidores B2B fijos que solo necesitan enviar y recibir datos de un CPT.
 
-- **Header**: `X-API-Key: <tu_api_key>` o predeterminado para auth generalizado en entornos de alto rendimiento.
+- **Header**: `X-API-Key: <tu_api_key>`
+
+Cada clave se crea desde **Autenticación > API Keys** asociada a un usuario de WordPress, del que **hereda los permisos**: asigna una cuenta con el rol mínimo que necesite la integración. Admite fecha de caducidad y el listado muestra su último uso, lo que permite detectar claves muertas.
+
+La clave en claro se muestra **una única vez**, al crearla; el plugin solo almacena su hash. Si se pierde, hay que revocarla y generar otra.
+
+> Las claves creadas antes de la versión 1.1.0 aparecen marcadas como obsoletas y no autentican.
+
+### D) Cerrar tu API
+
+En **Ajustes > Seguridad** puedes activar *Exigir credencial en tu namespace*. Con esa opción, cualquier petición a tus rutas sin credencial válida recibe un 401 aunque el endpoint esté configurado como público, y la documentación en `/docs` deja de ser accesible sin credencial. Está desactivada por defecto.
+
+**Qué no cubre**: los endpoints nativos de WordPress (`/wp-json/wp/v2/...`). Los registra WordPress, no este plugin, y se rigen por sus propias reglas de acceso. Marcar una ruta como visible en «Rutas globales» solo la incluye en la documentación generada; no la expone ni la protege. Si necesitas cerrar también la API nativa, hace falta una solución específica para eso.
 
 ---
 

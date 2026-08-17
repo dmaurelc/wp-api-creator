@@ -10,6 +10,32 @@ Además de Gatekeepers y Auth, el Middleware Layer asume el control del bloqueo 
 - **XSS (Cross-Site Scripting):** Toda ingesta desde POST/PUT que deba guardar un string sufre `sanitize_text_field` (o filtrado WP_Kses para posts ricos en HTML si se habilitó explícitamente contenido rico desde schema).
 - **Escalada de Privilegios:** Validar que el objeto a editar es propiedad fática del request, o del owner apropiado. Ningún payload de metadata puede cruzar hacia overrides que resetean passwords manipulando serializaciones inseguras.
 
+## 1.1 Deuda conocida (registrada, no resuelta)
+
+Tres puntos identificados durante la auditoría de 1.1.0 que se documentan con su ubicación exacta y la condición que los haría peligrosos.
+
+### Clave de caché de autorización de campos
+
+`Gatekeeper::$field_auth_cache` usa la clave `{user_id}_{field_key}_{action}` (`src/Permissions/Gatekeeper.php`, método `can_interact_with_field`) sin incluir la configuración del endpoint. Dos CPT que expongan un mismo meta con permisos distintos pueden compartir entrada de caché dentro de un mismo proceso.
+
+Hoy queda parcialmente enmascarado porque `OutputSerializer` construye su propia instancia de `Gatekeeper`. **Quien retome el refactor de inyección de dependencias debe arreglar la clave de caché antes de colapsar las instancias en un singleton**, o un campo restringido de un CPT se filtrará a través de otro.
+
+### Swagger UI carga scripts de terceros sin SRI
+
+`AdminApi::get_swagger_ui()` sirve una respuesta HTML que carga tres recursos de `unpkg.com` sin atributo `integrity`. Con `require_api_key` desactivado esa respuesta es anónima. Un compromiso del CDN ejecutaría código arbitrario en el navegador de quien abra la documentación.
+
+### `KeyUsageStore::touch()` es un read-modify-write sin bloqueo
+
+Dos peticiones concurrentes con API Keys distintas pueden perder una de las marcas de `last_used_at`. El impacto es cosmético y la guarda de 300 segundos lo hace poco frecuente. La alternativa sería una option por key, a costa de multiplicar las filas de `wp_options`.
+
+### Validación de `iss` y dominios múltiples
+
+`JwtProvider::validate_token()` compara `iss` con `get_bloginfo('url')`. En instalaciones con domain mapping, o con plugins que filtran `home_url` según la petición, un token emitido bajo un dominio se rechaza con `jwt_invalid_issuer` al usarlo desde otro. El remedio es reautenticar; si el escenario se vuelve habitual, habría que fijar el emisor a un valor estable en lugar de al dominio activo.
+
+### Mapeo de campos estático y sin invalidación
+
+`OutputSerializer::$field_mappings` es una propiedad `static` que nunca se invalida. Persiste durante todo el proceso PHP; si en el futuro se sirven varias configuraciones distintas en una misma petición, devolverá el mapeo de la primera.
+
 ## 2. Optimizaciones de Rendimiento (Performance)
 
 Las transacciones API exigen latencias sub 200ms.

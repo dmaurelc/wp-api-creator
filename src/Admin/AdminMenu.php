@@ -71,6 +71,10 @@ class AdminMenu
 
         // Variables inyectadas en window.wpApiCreatorData
         wp_localize_script('wp-api-creator-admin-app', 'wpApiCreatorData', [
+            // La version del plugin, no `$version`: esa se sobrescribe con el hash de
+            // build cuando existe index.asset.php. El dashboard la tenia escrita a mano
+            // y quedo desfasada en cuanto se publico una version nueva.
+            'version'  => WP_API_CREATOR_VERSION,
             'root_url' => esc_url_raw(rest_url('creator/v1/')),
             'docs_url' => esc_url_raw(rest_url('creator/v1/docs')),
             'openapi_json_url' => esc_url_raw(rest_url('creator/v1/docs/openapi.json')),

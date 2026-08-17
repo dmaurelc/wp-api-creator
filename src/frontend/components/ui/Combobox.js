@@ -8,16 +8,33 @@ export default function Combobox({
   placeholder = __("Selecciona...", "wp-api-creator"),
   disabled = false,
   className = "",
+  // Cuando se pasa `onSearch`, el filtrado deja de hacerse en cliente y las opciones
+  // las resuelve el padre contra el servidor. Necesario para listados que no caben en
+  // memoria: un sitio con decenas de miles de usuarios no puede cargarse entero.
+  onSearch = null,
+  isLoading = false,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [lastSelected, setLastSelected] = useState(null);
   const containerRef = useRef(null);
 
-  const selectedOption = options.find((opt) => opt.value === value);
+  // Con búsqueda en servidor, `options` cambia con cada consulta y la opción elegida puede
+  // desaparecer del lote actual. Se recuerda la última selección para que el disparador no
+  // vuelva al placeholder y dé a entender que se perdió.
+  const matchInOptions = options.find((opt) => opt.value === value);
+  const selectedOption =
+    matchInOptions || (lastSelected?.value === value ? lastSelected : null);
 
-  const filteredOptions = options.filter((opt) =>
-    opt.label.toLowerCase().includes(search.toLowerCase()),
-  );
+  useEffect(() => {
+    if (matchInOptions) setLastSelected(matchInOptions);
+  }, [matchInOptions]);
+
+  const filteredOptions = onSearch
+    ? options
+    : options.filter((opt) =>
+        opt.label.toLowerCase().includes(search.toLowerCase()),
+      );
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -33,10 +50,14 @@ export default function Combobox({
   }, []);
 
   useEffect(() => {
-    if (isOpen) setSearch("");
+    if (!isOpen) return;
+    setSearch("");
+    if (onSearch) onSearch("");
   }, [isOpen]);
 
   const handleSelect = (val) => {
+    const chosen = options.find((opt) => opt.value === val);
+    if (chosen) setLastSelected(chosen);
     onSelect(val);
     setIsOpen(false);
   };
@@ -95,11 +116,18 @@ export default function Combobox({
               className="tw-flex tw-h-8 tw-w-full tw-rounded-md tw-bg-transparent tw-py-3 tw-text-sm tw-outline-none placeholder:tw-text-muted-foreground disabled:tw-cursor-not-allowed disabled:tw-opacity-50 tw-border-none"
               placeholder={__("Buscar...", "wp-api-creator")}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                if (onSearch) onSearch(e.target.value);
+              }}
             />
           </div>
           <div className="tw-pt-1">
-            {filteredOptions.length === 0 ? (
+            {isLoading ? (
+              <div className="tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-2 tw-text-sm tw-outline-none tw-text-slate-400">
+                {__("Buscando...", "wp-api-creator")}
+              </div>
+            ) : filteredOptions.length === 0 ? (
               <div className="tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-2 tw-text-sm tw-outline-none tw-text-slate-400">
                 {__("No se encontraron resultados.", "wp-api-creator")}
               </div>
