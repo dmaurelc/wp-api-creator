@@ -80,18 +80,35 @@ Interfaz visual reactiva para la gestión total.
 - [x] Object Cache multinivel (`wp_cache_*`) en `ConfigBuilder` y `FieldScanner`.
 - [x] Limpieza de código PSR-12 en 26 archivos PHP.
 
+## Fase 8: API de lectura completa ✅ (Cerrada en 1.2.0)
+
+La cadena de las taxonomías tenía cuatro eslabones y solo existía el primero: `TaxonomyScanner` estaba escrito y jamás se instanciaba. Además, cinco parámetros de consulta estaban implementados en el repositorio y nunca llegaban a ejecutarse, de modo que `?search=x` devolvía la colección entera sin error.
+
+- [x] Taxonomías en el catálogo de campos con clave cualificada `tax:{nombre}`, imposibilitando la colisión con una meta homónima.
+- [x] Grupo «Taxonomías» en el editor de endpoints, oculto en los endpoints nativos de WordPress.
+- [x] Emisión de términos bajo la clave `taxonomies`, leyendo la caché que `WP_Query` ya ceba.
+- [x] Filtrado por taxonomía: OR dentro de una taxonomía, AND entre taxonomías.
+- [x] `Api\CollectionArgs` como fuente única de los parámetros, consumida por Router, caché y generador de OpenAPI.
+- [x] Cableado de `search`, `orderby`, `order`, `meta_key` y `meta_value`, con `enum` de metas expuestas y `400` ante cualquier valor no admitido.
+- [x] Filtro por `slug`.
+- [x] Resolución perezosa de los campos nativos: `the_content` deja de ejecutarse en endpoints que no exponen el contenido.
+- [x] Caché de respuestas efectiva (`cache_time`), limitada a listados publicados, con migración a 0 y botón de purga.
+- [x] Esquema OpenAPI y colección de Postman derivados de `CollectionArgs`, con test de paridad.
+
 ---
 
 ## Deuda conocida
 
 Registrada con ubicación exacta en `docs/08_seguridad_rendimiento_escalabilidad.md`:
 
-- [ ] Clave de caché de `Gatekeeper::$field_auth_cache` sin la configuración del endpoint. **Bloqueante para el refactor de inyección de dependencias.**
+- [ ] Clave de caché de `Gatekeeper::$field_auth_cache` sin la configuración del endpoint. Hoy **no es alcanzable** —la propiedad es de instancia— pero **sigue siendo bloqueante para el refactor de inyección de dependencias**: un singleton la convertiría en fuga real.
 - [ ] Swagger UI carga scripts de `unpkg.com` sin SRI.
 - [ ] `OutputSerializer::$field_mappings` es estático y nunca se invalida.
+- [ ] La ruta de elemento único resuelve los términos sin caché cebada: una consulta por taxonomía. Aceptable para un solo post, sin optimizar.
+- [ ] Los permisos por campo no gobiernan las taxonomías (decisión, no omisión: `field_permissions` sobre una clave `tax:` no tiene efecto).
 
-Fuera de alcance por decisión explícita: refresh tokens y `/auth/refresh`, lista negra de `jti`, scopes por API Key, suite de integración con `wp-env` y el refactor de inyección de dependencias.
+Fuera de alcance por decisión explícita: refresh tokens y `/auth/refresh`, lista negra de `jti`, scopes por API Key, suite de integración con `wp-env`, el refactor de inyección de dependencias, `_fields` por petición, `include`/`exclude` por IDs, `meta_query` con comparadores arbitrarios desde la URL y la escritura de términos vía POST/PATCH.
 
 ---
 
-**Próximos objetivos prioritarios:** Suite de integración sobre un WordPress real y saldar la deuda conocida antes de abordar el refactor de inyección de dependencias.
+**Próximos objetivos prioritarios:** Suite de integración sobre un WordPress real —varios criterios de 1.2.0 quedaron como verificación manual por no tenerla— y saldar la deuda conocida antes de abordar el refactor de inyección de dependencias.

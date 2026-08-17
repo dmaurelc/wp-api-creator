@@ -119,4 +119,42 @@ class ConfigMigratorTest extends TestCase
 
         $this->assertSame('1.1.0', $this->options->get(ConfigMigrator::VERSION_OPTION));
     }
+
+    // === Activacion segura de la cache de respuestas ===
+
+    public function test_actualizar_a_1_2_0_deja_el_tiempo_de_cache_en_cero(): void
+    {
+        $config = $this->legacy_config();
+        $config['settings']['cache_time'] = 300;
+        $this->options->set(ConfigBuilder::OPTION_KEY, $config);
+        $this->options->set(ConfigMigrator::VERSION_OPTION, '1.1.0');
+
+        ConfigMigrator::maybe_upgrade('1.2.0');
+
+        $stored = $this->options->get(ConfigBuilder::OPTION_KEY);
+        $this->assertSame(0, $stored['settings']['cache_time']);
+    }
+
+    public function test_una_actualizacion_posterior_no_vuelve_a_apagar_la_cache(): void
+    {
+        $config = $this->legacy_config();
+        $config['settings']['cache_time'] = 300;
+        $this->options->set(ConfigBuilder::OPTION_KEY, $config);
+        $this->options->set(ConfigMigrator::VERSION_OPTION, '1.2.0');
+
+        ConfigMigrator::maybe_upgrade('1.2.1');
+
+        $stored = $this->options->get(ConfigBuilder::OPTION_KEY);
+        $this->assertSame(300, $stored['settings']['cache_time']);
+    }
+
+    public function test_un_sitio_que_ya_tenia_la_cache_apagada_no_se_reescribe(): void
+    {
+        $this->options->set(ConfigMigrator::VERSION_OPTION, '1.1.0');
+        $antes = $this->options->get(ConfigBuilder::OPTION_KEY);
+
+        ConfigMigrator::disable_response_cache();
+
+        $this->assertSame($antes, $this->options->get(ConfigBuilder::OPTION_KEY));
+    }
 }

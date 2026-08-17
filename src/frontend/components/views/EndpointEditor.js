@@ -16,6 +16,7 @@ import Combobox from "../ui/Combobox";
 
 const SOURCE_LABELS = {
   native: "Core",
+  taxonomy: "Taxonomías",
   registered_meta: "Código",
   acf: "ACF",
   jetengine: "JetEngine",
@@ -26,6 +27,7 @@ const SOURCE_LABELS = {
 // Paleta Zinc unificada
 const SOURCE_COLORS = {
   native: { bg: "tw-bg-indigo-50/50", border: "tw-border-indigo-100" },
+  taxonomy: { bg: "tw-bg-teal-50/50", border: "tw-border-teal-100" },
   registered_meta: {
     bg: "tw-bg-emerald-50/50",
     border: "tw-border-emerald-100",
@@ -36,8 +38,15 @@ const SOURCE_COLORS = {
   flavor_re: { bg: "tw-bg-rose-50/50", border: "tw-border-rose-100" },
 };
 
+// Aviso propio de un grupo, mostrado al desplegarlo.
+const SOURCE_NOTES = {
+  taxonomy:
+    "Los términos se devuelven bajo la clave `taxonomies` y cada taxonomía marcada acepta además un parámetro de filtrado con su nombre. Los permisos por campo no se aplican a las taxonomías.",
+};
+
 const SOURCE_ORDER = [
   "native",
+  "taxonomy",
   "registered_meta",
   "acf",
   "jetengine",
@@ -47,8 +56,11 @@ const SOURCE_ORDER = [
 
 const getFieldSource = (field) => {
   if (field.group === "native") return "native";
+  if (field.group === "taxonomy") return "taxonomy";
   return field.source || "database_sample";
 };
+
+const isTaxonomyField = (field) => getFieldSource(field) === "taxonomy";
 
 const getGroupedFields = (availableFields) => {
   const groups = {};
@@ -183,6 +195,7 @@ function EndpointEditor({ endpoint, isGlobal = false, onSave, onCancel }) {
   // Inicializar cerrados por defecto
   const [collapsedSections, setCollapsedSections] = useState({
     native: true,
+    taxonomy: true,
     registered_meta: true,
     acf: true,
     jetengine: true,
@@ -276,19 +289,30 @@ function EndpointEditor({ endpoint, isGlobal = false, onSave, onCancel }) {
       apiFetch({ path: apiPath })
         .then((res) => {
           if (res && res.fields) {
-            const sanitizedFields = res.fields.map((f) => ({
-              ...f,
-              key: String(f.key || ""),
-              label:
-                typeof f.label === "string"
-                  ? f.label
-                  : String(f.label || f.key || ""),
-            }));
+            const sanitizedFields = res.fields
+              .map((f) => ({
+                ...f,
+                key: String(f.key || ""),
+                label:
+                  typeof f.label === "string"
+                    ? f.label
+                    : String(f.label || f.key || ""),
+              }))
+              // Los endpoints nativos de WordPress devuelven sus términos con su propio
+              // formato: una taxonomía marcada ahí no produciría nada.
+              .filter((f) => !isGlobal || !isTaxonomyField(f));
 
             setAvailableFields(sanitizedFields);
 
             if (!endpoint && (!exposedFields || exposedFields.length === 0)) {
-              setExposedFields(sanitizedFields.map((f) => f.key));
+              // Las taxonomías quedan fuera de la preselección: añaden consultas de
+              // términos y un parámetro de filtrado por cada una, así que se activan
+              // a conciencia.
+              setExposedFields(
+                sanitizedFields
+                  .filter((f) => !isTaxonomyField(f))
+                  .map((f) => f.key),
+              );
             }
           }
         })
@@ -732,6 +756,11 @@ function EndpointEditor({ endpoint, isGlobal = false, onSave, onCancel }) {
                           {/* Accordion Body */}
                           {!isCollapsed && (
                             <div className="tw-p-4 tw-bg-card">
+                              {SOURCE_NOTES[source] && (
+                                <p className="tw-text-[11px] tw-text-foreground-muted tw-mt-0 tw-mb-3 tw-leading-relaxed">
+                                  {SOURCE_NOTES[source]}
+                                </p>
+                              )}
                               <div className="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-2">
                                 {fields.map((field) => (
                                   <div

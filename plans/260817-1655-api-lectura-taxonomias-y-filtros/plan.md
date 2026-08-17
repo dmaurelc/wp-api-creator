@@ -1,7 +1,7 @@
 ---
 title: "API de lectura: taxonomias, filtros y cache"
 description: "Completa la API de lectura: expone taxonomias, conecta los parametros de filtrado que nunca llegaron al repositorio y hace efectivo el ajuste de cache."
-status: pending
+status: completed
 priority: P1
 branch: "main"
 tags: [api, taxonomias, filtros, cache, rendimiento]
@@ -122,6 +122,34 @@ Esfuerzo estimado: **~38h**, frente a las 36h del plan previo a la revision. Los
 `OutputSerializer::$field_mappings` es `static` y nunca se invalida. La fase 1 lo toca de cerca y añade reset entre tests; corregir su naturaleza queda fuera.
 
 **Correccion pendiente de 1.1.0:** `docs/08` afirma que `Gatekeeper::$field_auth_cache` puede compartir veredicto entre dos CPT. Es falso: la propiedad es `private`, no `static` (`Gatekeeper.php:123`), vive por instancia y cada peticion construye un `Gatekeeper` que atiende un solo config. La entrada exagera el riesgo. La fase 1 la corrige.
+
+## Implementación
+
+Ejecutada el 17-ago-2026. Las seis fases están en el código; la suite pasa de 86 a 193 tests (329 assertions).
+
+### Hallazgos de la revisión posterior, y qué se hizo
+
+| # | Hallazgo | Severidad | Resolución |
+|---|---|---|---|
+| C1 | Una taxonomía homónima de un parámetro reservado no declaraba su argumento pero **sí** entraba en `tax_query` con el valor por defecto que rellena WordPress: el listado exigía ese término y salía vacío sin que el cliente enviase nada. Afectaba a `status`, `orderby`, `order`, `page` y `limit`. | Crítico | `CollectionArgs::filterable_taxonomies()` centraliza la exclusión; `for_endpoint()` y `to_query_args()` derivan de ella. Verificado ejecutando las clases reales. |
+| — | `'sanitize_callback' => 'sanitize_title'` recibía el `WP_REST_Request` como texto de reserva y perdía el contexto `'save'` (sin `remove_accents`). | Alto | Envoltorio `CollectionArgs::sanitize_slug()`. |
+| A1 | `slug` y `meta_value` son texto libre igual que `search`: espacio de claves de caché ilimitado desde peticiones anónimas. | Alto | `ResponseCache::UNBOUNDED_PARAMS`. |
+| M1 | `get_object_taxonomies()` devuelve también las no públicas. Una taxonomía marcada cuando era pública seguía filtrando y emitiendo términos si el plugin que la registra la cerraba después. | Medio | Comprobación de `public` en `exposed_taxonomies()` y en el serializador. |
+| M2 | El invalidador de metas escribía en `wp_options` ante cualquier meta del sitio: un contador de visitas por metadato dejaría la caché invalidada de forma permanente. | Medio | Acotado a `cache_time > 0` y a tipos de contenido expuestos. |
+| M3 | `meta_value` sin `meta_key` se ignoraba en silencio, justo el fallo que la fase 3 existe para erradicar. | Medio | `validate_meta_value()` simétrico. |
+| M4 | La migración corre en contextos de gestión: si la actualización es automática y la siguiente petición es de la API, la caché sigue activa unos minutos. | Medio | Documentado en el código; mover el apagado al path de request sería peor. |
+
+### Descartados tras trazarlos
+
+`validate_callback` propio anulando el `enum` (no ocurre: `meta_key` invoca `rest_validate_request_arg()`), fuga de datos entre usuarios por la caché, inyección de estructura en `tax_query`/`meta_query`, y el bypass de `field_permissions` por taxonomías (no hay interfaz que pueble esa configuración).
+
+### Decisión pendiente
+
+`order` y `orderby` distinguen mayúsculas (`ASC`/`DESC`, `ID`), tal como fija el plan. La API nativa de WordPress usa minúsculas, así que un cliente escrito contra `/wp/v2` recibe `400`. Documentado en el changelog; queda a decisión del usuario si se acepta también la otra caja.
+
+### Sin verificar
+
+Los criterios marcados «(manual)» siguen pendientes: conteo real de consultas al serializar términos, medición de la caché con object cache activo y ejecución de los ejemplos de la documentación contra un sitio real. La máquina de desarrollo no tiene PHP (la suite corre en un contenedor) y el sitio de pruebas no tiene desplegado este código.
 
 ## Red Team Review
 

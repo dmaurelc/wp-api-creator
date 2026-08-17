@@ -266,6 +266,11 @@ class ConfigBuilder
 
         self::invalidate_cache();
 
+        // Las respuestas cacheadas dependen de qué campos expone cada endpoint y de sus
+        // permisos. Se invalida aquí y no en `AdminApi` porque este es el único punto por
+        // el que pasan los cuatro caminos de guardado del dashboard y también la migración.
+        ResponseCache::bump_config_version();
+
         if ($saved) {
             return true;
         }

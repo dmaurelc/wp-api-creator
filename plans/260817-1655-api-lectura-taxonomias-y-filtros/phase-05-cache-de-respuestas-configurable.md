@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Cache de respuestas configurable"
-status: pending
+status: completed
 priority: P2
 effort: "6h"
 dependencies: [2, 3, 4]

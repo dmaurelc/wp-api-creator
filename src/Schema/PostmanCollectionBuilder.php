@@ -104,11 +104,19 @@ class PostmanCollectionBuilder
                     ];
                 }
                 if ($param['in'] === 'query') {
-                    $request['request']['url']['query'][] = [
+                    $query = [
                         'key'   => $param['name'],
                         'value' => isset($param['schema']['default']) ? (string)$param['schema']['default'] : '',
                         'description' => $param['description'] ?? ''
                     ];
+
+                    // Los parámetros opcionales llegan desmarcados: enviarlos vacíos en
+                    // cada petición cambiaría el resultado de filtros como `slug`.
+                    if (!isset($param['schema']['default'])) {
+                        $query['disabled'] = true;
+                    }
+
+                    $request['request']['url']['query'][] = $query;
                 }
             }
             if (!empty($variables)) {

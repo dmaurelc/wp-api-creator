@@ -105,6 +105,111 @@ if (!class_exists('WP_User')) {
     }
 }
 
+if (!class_exists('WP_Post')) {
+    /**
+     * Doble minimo de WP_Post: solo las propiedades que lee el serializador.
+     */
+    class WP_Post
+    {
+        public $ID = 0;
+        public $post_title = '';
+        public $post_content = '';
+        public $post_excerpt = '';
+        public $post_name = '';
+        public $post_status = 'publish';
+        public $post_author = 0;
+        public $post_type = 'post';
+        public $post_date = '';
+        public $post_modified = '';
+
+        public function __construct(array $props = [])
+        {
+            foreach ($props as $key => $value) {
+                $this->$key = $value;
+            }
+        }
+    }
+}
+
+if (!class_exists('WP_Term')) {
+    /**
+     * Doble minimo de WP_Term: lo que emite el bloque de taxonomias.
+     */
+    class WP_Term
+    {
+        public $term_id = 0;
+        public $name = '';
+        public $slug = '';
+        public $taxonomy = '';
+        public $parent = 0;
+
+        public function __construct(array $props = [])
+        {
+            foreach ($props as $key => $value) {
+                $this->$key = $value;
+            }
+        }
+    }
+}
+
+if (!class_exists('WP_Query')) {
+    /**
+     * Doble espia de WP_Query.
+     *
+     * Captura los argumentos con los que se construye para poder afirmar sobre
+     * `tax_query`, `meta_query` y `orderby` sin una base de datos detras, y devuelve
+     * los resultados que el test haya preparado.
+     */
+    class WP_Query
+    {
+        /** @var array[] Argumentos de cada instancia construida, en orden. */
+        public static array $captured_args = [];
+
+        /** @var array Posts que devolvera la proxima instancia. */
+        public static array $next_posts = [];
+
+        public static int $next_found_posts = 0;
+
+        public static int $next_max_num_pages = 0;
+
+        public $posts = [];
+        public $found_posts = 0;
+        public $max_num_pages = 0;
+        public $query_vars = [];
+
+        public function __construct($args = [])
+        {
+            $args = is_array($args) ? $args : [];
+
+            self::$captured_args[] = $args;
+
+            $this->query_vars    = $args;
+            $this->posts         = self::$next_posts;
+            $this->found_posts   = self::$next_found_posts;
+            $this->max_num_pages = self::$next_max_num_pages;
+        }
+
+        /**
+         * Deja el espia limpio entre tests.
+         */
+        public static function reset(): void
+        {
+            self::$captured_args     = [];
+            self::$next_posts        = [];
+            self::$next_found_posts  = 0;
+            self::$next_max_num_pages = 0;
+        }
+
+        /**
+         * Argumentos de la ultima consulta construida.
+         */
+        public static function last_args(): array
+        {
+            return self::$captured_args ? end(self::$captured_args) : [];
+        }
+    }
+}
+
 if (!class_exists('WP_REST_Response')) {
     /**
      * Doble minimo de WP_REST_Response.

@@ -44,6 +44,8 @@ foreach ($post_fields as $field_key => $value) {
 }
 ```
 
+**Las taxonomías quedan fuera de este nivel.** Los términos se emiten bajo la clave `taxonomies` sin pasar por `can_interact_with_field()`: `TaxonomyScanner` ya descarta las taxonomías no públicas, y nadie ha pedido permisos por taxonomía. En consecuencia, una entrada de `field_permissions` cuya clave sea `tax:{nombre}` no tiene ningún efecto. Si una taxonomía no debe salir en la API, la vía es no marcarla en el endpoint.
+
 Así mismo en Peticiones POST/PATCH (`write`):
 Si un usuario de bajo nivel envía a un endpoint habilitado de PATCH un JSON conteniendo `{"price": 50, "is_featured": true}`, y carece de permisos para modificar el campo `is_featured`, el Ingestion Service omite silenciosamente ese metacampo (o arroja 403 sobre el payload dependiendo del setting de tolerancia a modo estricto).
 

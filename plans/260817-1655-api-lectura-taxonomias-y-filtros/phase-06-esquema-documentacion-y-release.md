@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Esquema documentacion y release"
-status: pending
+status: completed
 priority: P2
 effort: "6h"
 dependencies: [1, 2, 3, 4, 5]

@@ -113,6 +113,12 @@ class AdminApi
             'permission_callback' => [$this, 'check_admin_permissions']
         ]);
 
+        register_rest_route($this->namespace, '/admin/purge-response-cache', [
+            'methods'  => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'purge_response_cache'],
+            'permission_callback' => [$this, 'check_admin_permissions']
+        ]);
+
         register_rest_route($this->namespace, '/admin/all-routes', [
             'methods'  => WP_REST_Server::READABLE,
             'callback' => [$this, 'get_all_routes'],
@@ -230,7 +236,12 @@ class AdminApi
     {
         return new WP_REST_Response([
             'success' => true,
-            'data'    => ConfigBuilder::get_global_settings()
+            'data'    => ConfigBuilder::get_global_settings(),
+            // Estado del entorno, no configuración: sin object cache persistente el
+            // tiempo de caché no ahorra nada entre peticiones y el dashboard lo advierte.
+            'runtime' => [
+                'persistent_object_cache' => \WpApiCreator\Domain\ResponseCache::is_persistent(),
+            ],
         ], 200);
     }
 
@@ -368,6 +379,22 @@ HTML;
         return new WP_REST_Response([
             'success' => true,
             'message' => __('Caché de introspección limpiada correctamente.', 'wp-api-creator')
+        ], 200);
+    }
+
+    /**
+     * Vacía la caché de respuestas de la API.
+     *
+     * Sin este botón, el único remedio ante una respuesta obsoleta sería volver a guardar
+     * los ajustes, y desactivar el plugin no vacía un Redis externo.
+     */
+    public function purge_response_cache(WP_REST_Request $request)
+    {
+        \WpApiCreator\Domain\ResponseCache::purge();
+
+        return new WP_REST_Response([
+            'success' => true,
+            'message' => __('Caché de respuestas purgada correctamente.', 'wp-api-creator')
         ], 200);
     }
 

@@ -89,16 +89,23 @@ npm run zip
 
 ### Paso 1: Actualizar Versiones
 
-Editar `wp-api-creator.php` (líneas 6 y 19):
+Editar `wp-api-creator.php` (líneas 6 y 20):
 ```php
-Version:     1.1.0
-define('WP_API_CREATOR_VERSION', '1.1.0');
+Version:     1.2.0
+define('WP_API_CREATOR_VERSION', '1.2.0');
 ```
 
 Editar `package.json` (línea 3):
 ```json
-"version": "1.1.0"
+"version": "1.2.0"
 ```
+
+Editar el `Stable tag` de `README.md` (línea 8).
+
+> **La versión del plugin también gobierna la migración.** `ConfigMigrator::maybe_upgrade()`
+> compara la versión almacenada con la del plugin y, al cruzar 1.2.0, fuerza `cache_time`
+> a 0. Si en el futuro se añade otra migración condicionada a una versión, va con su
+> propia constante, no reutilizando `RESPONSE_CACHE_VERSION`.
 
 ### Paso 2: Actualizar Changelog
 
@@ -269,8 +276,9 @@ unzip -l wp-api-creator.zip | grep "build/index.js"
 
 # Verificar que el dashboard empaquetado es el de esta versión y no el del commit
 # anterior. `git archive` lee el commit, no el árbol de trabajo.
-unzip -p wp-api-creator.zip build/index.js | grep -c "Ya la he guardado en un lugar seguro"
-# Debe retornar 1 en 1.1.0
+unzip -p wp-api-creator.zip build/index.js | grep -c "Purgar caché de respuestas"
+# Debe retornar 1 en 1.2.0
+# (en 1.1.0 la cadena testigo era "Ya la he guardado en un lugar seguro")
 ```
 
 ---

@@ -11,7 +11,13 @@ El **`CptScanner`** corre durante configuraciones en el Backend o en procesos de
 - Intercepta `get_post_types(['public' => true], 'objects')`.
 - Determina si son tipos nativos (posts, pages) o extendidos.
 - Filtra entidades del core no relevantes (ej. `nav_menu_item`, `acf-field-group`).
-- Paralelamente el **`TaxonomyScanner`** mapea mediante `get_object_taxonomies()` qué categorías/etiquetas/custom_tax pertenecen al CPT iterado.
+- Paralelamente el **`TaxonomyScanner`** mapea mediante `get_object_taxonomies()` qué categorías/etiquetas/custom_tax pertenecen al CPT iterado. Descarta las no públicas y `nav_menu`.
+
+`FieldScanner` incorpora esa lista al catálogo que consume el editor de endpoints, en un grupo propio (`group => 'taxonomy'`) y con la clave **cualificada**: `tax:{nombre}`.
+
+El prefijo no es cosmético. `OutputSerializer` construye un mapa de un origen por clave con la última escritura ganando, y sus dos filtros de seguridad —el que bloquea las metas con prefijo `_` y el que descarta el muestreo de base de datos— están condicionados a ese origen. Sin cualificar, un CPT de propiedades con una taxonomía `ubicacion` y un campo ACF `ubicacion` haría que una de las dos dejara de emitirse en silencio, y una meta interna homónima de una taxonomía esquivaría los filtros. Con el prefijo la colisión deja de ser posible por construcción, no por convención de orden.
+
+Los `exposed_fields` guardados antes de 1.2.0 no contienen ninguna clave `tax:`, así que ningún endpoint existente cambia de comportamiento: quien quiera taxonomías las marca.
 
 ## 2. Descubrimiento Profundo de Campos (Field Scanner)
 

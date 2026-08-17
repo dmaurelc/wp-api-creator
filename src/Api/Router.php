@@ -20,6 +20,7 @@ use WpApiCreator\Auth\ApiKeyProvider;
 use WpApiCreator\Media\MediaUploader;
 use WpApiCreator\Domain\Logger;
 use WpApiCreator\Admin\AdminApi;
+use WpApiCreator\Schema\FieldScanner;
 
 class Router
 {
@@ -109,6 +110,12 @@ class Router
 
         // Inyectar meta fields configurados que no están en la respuesta nativa
         foreach ($exposed as $field_key) {
+            // Las claves de taxonomía no son metas. Este filtro sirve endpoints nativos
+            // de WordPress, que ya exponen sus términos con su propio formato.
+            if (strpos($field_key, FieldScanner::TAXONOMY_PREFIX) === 0) {
+                continue;
+            }
+
             if (!isset($filtered[$field_key]) && !isset($data[$field_key])) {
                 $meta_value = get_post_meta($post->ID, $field_key, true);
                 if ($meta_value !== '' && $meta_value !== false) {
@@ -320,7 +327,7 @@ class Router
                     'methods'             => WP_REST_Server::READABLE,
                     'callback'            => [$this, 'handle_collection_get'],
                     'permission_callback' => [$this, 'check_read_permissions'],
-                    'args'                => $this->get_collection_args(),
+                    'args'                => $this->get_collection_args($endpoint),
                 ],
                 [
                     'methods'             => WP_REST_Server::CREATABLE,
@@ -454,26 +461,14 @@ class Router
     }
 
     /**
-     * Define los parámetros aceptados para el GET de colecciones
+     * Define los parámetros aceptados para el GET de colecciones.
+     *
+     * La lista vive en `CollectionArgs` porque la comparten la caché de respuestas y el
+     * generador de OpenAPI, ambos estáticos.
+     *
+     * @param array $config Configuración del endpoint.
      */
-    protected function get_collection_args(): array {
-        return [
-            'page' => [
-                'type' => 'integer',
-                'default' => 1,
-                'sanitize_callback' => 'absint',
-            ],
-            'limit' => [
-                'type' => 'integer',
-                'default' => 10,
-                'sanitize_callback' => 'absint',
-            ],
-            'status' => [
-                'type' => 'string',
-                'default' => 'publish',
-                'enum' => DynamicQueryBuilder::ALLOWED_STATUSES,
-                'description' => 'Estado de las entradas. Los estados no públicos exigen capacidades sobre el tipo de contenido.',
-            ],
-        ];
+    protected function get_collection_args(array $config): array {
+        return CollectionArgs::for_endpoint($config);
     }
 }

@@ -5,7 +5,7 @@ Tags: api, rest api, headless cms, json, wordpress api, custom endpoints, dashbo
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -70,12 +70,25 @@ GET /wp-json/mi-namespace/v1/propiedades/123
 # Crear un nuevo recurso (requiere autenticación)
 POST /wp-json/mi-namespace/v1/propiedades
 
-# Filtrar con meta campos
+# Filtrar con meta campos (la meta debe estar seleccionada en el endpoint)
 GET /wp-json/mi-namespace/v1/propiedades?meta_key=precio&meta_value=100000
 
 # Paginación
 GET /wp-json/mi-namespace/v1/propiedades?limit=10&page=2
+
+# Buscar y ordenar
+GET /wp-json/mi-namespace/v1/propiedades?search=duplex&orderby=title&order=ASC
+
+# Obtener una entrada por su slug
+GET /wp-json/mi-namespace/v1/propiedades?slug=duplex-en-providencia
+
+# Filtrar por taxonomía (varios términos = OR, varias taxonomías = AND)
+GET /wp-json/mi-namespace/v1/propiedades?ubicacion=providencia,las-condes&estado=en-venta
 ```
+
+Los parámetros de taxonomía existen solo para las taxonomías marcadas en el editor del endpoint, y toman el nombre de la taxonomía.
+
+> **`_fields` no funciona en esta API.** WordPress lo reserva y recorta las claves de primer nivel de la respuesta; como estas rutas devuelven `{data, meta}`, `?_fields=id,title` devuelve `[]`. Los campos se eligen en el editor de endpoints, no por petición.
 
 ### Autenticación
 
@@ -110,6 +123,36 @@ Sí. Desde el dashboard puedes configurar permisos por recurso y por método HTT
 Sí. El plugin detecta automáticamente campos de ACF, JetEngine, MetaBox y otros plugins similares.
 
 ## Changelog
+
+### 1.2.0
+
+Versión de utilidad: la API de lectura pasa a poder representar taxonomías y los parámetros que se documentaban sin efecto empiezan a tenerlo.
+
+#### Correcciones de comportamiento
+
+Estos cuatro parámetros y ajustes estaban documentados o visibles en el dashboard y no hacían nada. **Ahora sí lo hacen, así que un cliente que los enviara sin notarlo verá otra respuesta.**
+
+* **`search` filtra.** Hasta ahora `?search=loquesea` devolvía la colección entera, sin error. Si tu integración lo enviaba y esperaba la lista completa, retíralo.
+* **`orderby` y `order` ordenan.** `orderby` acepta `date`, `modified`, `title`, `menu_order` e `ID`; `order` acepta `ASC` y `DESC`. **Ambos distinguen mayúsculas y minúsculas, y cualquier otro valor devuelve `400`** donde antes se ignoraba en silencio: si tu cliente venía enviando `?order=asc` u `?orderby=id` —la caja que usa la API nativa de WordPress— tendrás que ajustarlo. Quedan fuera `meta_value`, `meta_value_num` y `rand`, que obligan a consultas sin índice.
+* **`meta_key` y `meta_value` filtran**, y solo se aceptan sobre las metas que el endpoint expone: pedir una clave no expuesta devuelve `400`. Un endpoint sin metas seleccionadas no declara los dos parámetros. Los dos van siempre juntos —enviar uno solo devuelve `400` en lugar de ignorarse— y `meta_value=0` filtra en lugar de descartarse.
+* **`cache_time` cachea de verdad.** Al actualizar **se fuerza a 0** aunque tuvieras un valor guardado: el ajuste llevaba versiones siendo decorativo y el dashboard recomendaba 300, así que activarlo solo debe ocurrir a conciencia. Actívalo cuando quieras desde **Ajustes**, donde también hay un botón para purgar la caché.
+
+#### Novedades
+
+* **Taxonomías en la respuesta.** El editor de endpoints muestra un grupo «Taxonomías» con las taxonomías públicas del tipo de contenido. Las marcadas se devuelven bajo la clave `taxonomies`, agrupadas por taxonomía, con `id`, `name` y `slug` de cada término. Una taxonomía y un campo personalizado con el mismo nombre conviven sin pisarse.
+* **Filtrado por taxonomía.** Cada taxonomía marcada acepta un parámetro de consulta con su nombre: `?categoria=guias`. Varios términos separados por coma se combinan con OR (`?categoria=guias,php`); varias taxonomías, con AND. Un término inexistente devuelve cero resultados.
+* **Filtro por `slug`**: `?slug=mi-articulo` devuelve la entrada correspondiente sin necesidad de conocer su ID.
+* **Caché de respuestas configurable**, limitada a los listados públicos. No se cachean la ruta de un elemento concreto, las peticiones que piden un estado distinto de publicado ni las que llevan un parámetro de valor libre (`search`, `slug` o `meta_value`), y la clave incorpora los roles de quien pregunta. Requiere un object cache persistente (Redis o Memcached) para ahorrar trabajo entre peticiones; el dashboard avisa si no lo hay.
+* **La documentación OpenAPI y la colección de Postman se derivan de la misma lista de parámetros que registra cada ruta**, incluidos los de taxonomía, que aparecen solo en los endpoints que las exponen.
+
+#### Rendimiento
+
+* Los campos nativos se resuelven solo si el endpoint los expone. Antes, un endpoint configurado para devolver únicamente el título ejecutaba igualmente el renderizado completo del contenido —bloques, shortcodes y oEmbed— por cada entrada de la colección.
+
+#### Notas para quien integra
+
+* **`_fields` no funciona con esta API y nunca lo hizo.** WordPress reserva ese nombre y recorta las claves de primer nivel de la respuesta; como estas rutas devuelven `{data, meta}`, `?_fields=id,title` devuelve `[]` y `?_fields=meta` devuelve solo la paginación. No lo uses: selecciona los campos en el editor de endpoints.
+* Los permisos por campo no gobiernan las taxonomías. Una taxonomía que no deba salir se deja sin marcar en el endpoint.
 
 ### 1.1.0
 

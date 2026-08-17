@@ -4,6 +4,7 @@ namespace WpApiCreator\Core;
 
 use WpApiCreator\Auth\TokenVersionStore;
 use WpApiCreator\Domain\ConfigMigrator;
+use WpApiCreator\Domain\ResponseCache;
 
 /**
  * Clase principal que inicializa el ciclo de vida del plugin.
@@ -43,6 +44,7 @@ class Plugin
         $this->container->get(\WpApiCreator\Admin\AdminApi::class)->register_hooks();
 
         $this->register_token_invalidation_hooks();
+        $this->register_response_cache_hooks();
 
         add_action('init', [$this, 'on_wp_init']);
     }
@@ -85,6 +87,29 @@ class Plugin
                 TokenVersionStore::revoke((int) $user_id);
             }
         }, 10, 2);
+    }
+
+    /**
+     * Eventos que deben invalidar las respuestas cacheadas.
+     *
+     * Los cambios en las entradas y en los términos los cubren los marcadores
+     * `last_changed` que WordPress ya mueve por su cuenta y que forman parte de la clave.
+     * Los metadatos no: `update_metadata()` limpia la caché de `post_meta` sin llamar a
+     * `clean_post_cache()`, de modo que un PATCH que solo cambia metas no invalidaría
+     * nada. Estos tres hooks cierran ese hueco.
+     *
+     * Se pide el segundo argumento para acotar por tipo de contenido: los hooks se
+     * disparan en todo el sitio, no solo en las entradas que la API publica.
+     *
+     * @return void
+     */
+    protected function register_response_cache_hooks(): void
+    {
+        foreach (['added_post_meta', 'updated_post_meta', 'deleted_post_meta'] as $hook) {
+            add_action($hook, function ($meta_id, $object_id) {
+                ResponseCache::bump_meta_version_for_post((int) $object_id);
+            }, 10, 2);
+        }
     }
 
     /**

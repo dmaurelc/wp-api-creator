@@ -36,8 +36,25 @@ Los endpoints de GET implementan mapeo avanzado hacia `WP_Query`:
     }
   }
   ```
-- **Filtros Flexibles:** Soporte natural para meta-filtros: `?_filter[precio_min]=400000`, `?_filter[status]=active`.
-- **Relaciones Expandibles:** Parámetro `?_include=agente_inmobiliario`. En lugar de devolver el simple ID del autor/relación, incrusta el objeto relacional.
+- **Parámetros aceptados.** La lista canónica vive en `Api\CollectionArgs::for_endpoint()`, y de ahí la consumen el Router al registrar la ruta, la caché de respuestas al construir su clave y el generador de OpenAPI al documentarla. Duplicarla es lo que dejó cinco parámetros documentados sin efecto hasta 1.2.0.
+
+  | Parámetro | Traducción a `WP_Query` |
+  |---|---|
+  | `page`, `limit` | `paged`, `posts_per_page` (tope 100) |
+  | `status` | `post_status`, contrastado contra capacidades |
+  | `slug` | `name` |
+  | `search` | `s` |
+  | `orderby`, `order` | `orderby`, `order`, acotados por `DynamicQueryBuilder::ALLOWED_ORDERBY` |
+  | `meta_key` + `meta_value` | `meta_query` con `compare = '='`; el `enum` solo admite metas expuestas |
+  | Nombre de cada taxonomía expuesta | `tax_query` por `slug`, OR dentro y AND entre taxonomías |
+
+  Una taxonomía cuyo nombre coincida con cualquiera de los parámetros anteriores **no** se convierte en filtro. La exclusión vive en `CollectionArgs::filterable_taxonomies()` y no en cada consumidor: declarar el argumento y traducirlo a la consulta tienen que decidirse con el mismo criterio. Separarlos fallaba en silencio —una taxonomía `status` no llegaba a declarar su parámetro, pero sí entraba en la `tax_query` con el valor por defecto `publish`, de modo que el listado exigía ese término y salía vacío sin que el cliente hubiese enviado nada.
+
+- **Nada se ignora en silencio.** Un valor fuera del `enum` devuelve `400 rest_not_in_enum` antes de llegar al controlador, y `meta_key` sin `meta_value` devuelve `400`.
+
+- **`_filter[]` y `_include` no existen.** Aparecían en el diseño original; `_include` llegó a declararse sin hacer nada y se retiró en 1.1.0. Exponer comparadores arbitrarios desde la URL sigue fuera de alcance.
+
+- **`_fields` es de WordPress, no de este plugin**, y recorta las claves de primer nivel: con el envoltorio `{data, meta}` deja la respuesta inservible. No se usa.
 
 ## 3. Control Granular de Retorno (Data Mapping)
 
@@ -50,23 +67,27 @@ El esquema base es agnóstico del core:
 {
   "id": 105,
   "title": "Apartamento Centro",
-  "slug": "apartamento-centro",
-  "dates": {
-    "created_at": "2023-01-01T14:00:00Z",
-    "modified_at": "2023-01-02T10:00:00Z"
-  },
   "content": "<p>Hermoso...</p>",
-  "fields": {
-    "precio": 500000,
-    "habitaciones": 3,
-    "caracteristicas": ["WIFI", "Piscina"]
-  },
+  "slug": "apartamento-centro",
+  "date": "2023-01-01T14:00:00+00:00",
+  "modified": "2023-01-02T10:00:00+00:00",
+  "featured_media": { "id": 87, "url": "https://ejemplo.test/foto.jpg" },
   "taxonomies": {
-    "city": "Madrid",
-    "type": "Duplex"
+    "ciudad": [{ "id": 12, "name": "Madrid", "slug": "madrid" }],
+    "tipo":   [{ "id": 4,  "name": "Dúplex", "slug": "duplex" }]
+  },
+  "fields": {
+    "acf": { "precio": 500000, "habitaciones": 3 }
   }
 }
 ```
+
+Notas sobre la forma real:
+
+- Las claves nativas van en el primer nivel, con los nombres de la configuración (`date`, `modified`), y **solo aparecen las expuestas**. Cada una se resuelve únicamente si el endpoint la incluye: un endpoint que solo devuelve `title` no paga el renderizado del contenido.
+- `taxonomies` agrupa por taxonomía y devuelve una lista de términos con `id`, `name` y `slug`. La clave se omite si el endpoint no marcó ninguna; una taxonomía sin términos en esa entrada devuelve lista vacía.
+- `fields` agrupa las metas por su origen (`acf`, `metabox`, `jetengine`, `registered_meta`…), no en plano.
+- Las taxonomías se guardan en `exposed_fields` con la clave cualificada `tax:{nombre}`. El prefijo evita que una taxonomía y una meta con el mismo nombre compartan entrada en el mapa de orígenes, donde la última escritura ganaba y dejaba a la otra sin emitir.
 
 ## 4. Gestión de Rewrite Rules Automáticas (Routing Interno)
 

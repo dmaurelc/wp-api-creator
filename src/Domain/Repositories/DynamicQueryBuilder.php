@@ -14,6 +14,17 @@ class DynamicQueryBuilder
     const ALLOWED_STATUSES = ['publish', 'draft', 'pending', 'private'];
 
     /**
+     * Criterios de ordenación aceptados.
+     *
+     * Quedan fuera a propósito:
+     * - `meta_value` y `meta_value_num`, que obligan a un JOIN sobre `wp_postmeta` sin
+     *   índice útil para ordenar.
+     * - `rand`, que es `ORDER BY RAND()`: una consulta sin índice por definición. Un
+     *   cliente que necesite contenido aleatorio pide N elementos y los baraja.
+     */
+    const ALLOWED_ORDERBY = ['date', 'modified', 'title', 'menu_order', 'ID'];
+
+    /**
      * Construye y ejecuta un WP_Query basándose en los argumentos de la solicitud y el config del CPT.
      * 
      * @param string $post_type
@@ -57,28 +68,43 @@ class DynamicQueryBuilder
             ];
         }
 
-        // Mapeo dinámico de orderby
-        if (!empty($args['orderby'])) {
-            $query_args['orderby'] = sanitize_text_field($args['orderby']);
+        // Mapeo dinámico de orderby. El `enum` del argumento ya rechaza cualquier otro
+        // valor con un 400; la lista blanca aquí es la segunda barrera para las llamadas
+        // que no pasan por el Router.
+        if (!empty($args['orderby']) && in_array($args['orderby'], self::ALLOWED_ORDERBY, true)) {
+            $query_args['orderby'] = $args['orderby'];
         }
         if (!empty($args['order']) && in_array(strtoupper($args['order']), ['ASC', 'DESC'])) {
             $query_args['order'] = strtoupper($args['order']);
         }
 
-        // Mapeo dinámico de Filtros Básicos (Meta Query pre-construída para strings estáticos)
-        if (!empty($args['meta_key']) && !empty($args['meta_value'])) {
+        // Mapeo dinámico de Filtros Básicos (Meta Query pre-construída para strings estáticos).
+        // Se comprueba presencia y no `!empty()`: `meta_value=0` es un valor legítimo que
+        // antes se descartaba en silencio.
+        if (isset($args['meta_key'], $args['meta_value']) && $args['meta_key'] !== '') {
              $query_args['meta_query'] = [
                 [
                     'key'     => sanitize_text_field($args['meta_key']),
-                    'value'   => sanitize_text_field($args['meta_value']),
+                    'value'   => sanitize_text_field((string) $args['meta_value']),
                     'compare' => '='
                 ]
              ];
         }
 
+        // Filtro por slug: es lo que necesita una ruta de detalle que no conoce el ID.
+        if (!empty($args['slug'])) {
+            $query_args['name'] = sanitize_title($args['slug']);
+        }
+
         // Integración de Búsqueda de texto (S)
         if (!empty($args['search'])) {
             $query_args['s'] = sanitize_text_field($args['search']);
+        }
+
+        // Filtrado por taxonomía: OR dentro de una taxonomía, AND entre taxonomías.
+        $tax_query = $this->build_tax_query($args['taxonomies'] ?? []);
+        if (!empty($tax_query)) {
+            $query_args['tax_query'] = $tax_query;
         }
 
         // Se usa `wp_cache_set` a niveles superiores. WP_Query internamente ya cachea post_objects 
@@ -94,6 +120,51 @@ class DynamicQueryBuilder
                 'limit'        => $limit
             ]
         ];
+    }
+
+    /**
+     * Traduce los filtros de taxonomía recibidos a una `tax_query` de WP_Query.
+     *
+     * Cada valor admite varios términos separados por coma, que se resuelven como OR
+     * dentro de su taxonomía; varias taxonomías se combinan con AND.
+     *
+     * `sanitize_title` sobre cada término impide inyectar estructura en la consulta. Un
+     * término inexistente devuelve cero resultados en lugar de un 400: validarlo contra
+     * la lista real de términos costaría una consulta adicional por petición.
+     *
+     * @param mixed $taxonomies Mapa taxonomía => términos separados por coma.
+     * @return array
+     */
+    protected function build_tax_query($taxonomies): array
+    {
+        if (!is_array($taxonomies) || empty($taxonomies)) {
+            return [];
+        }
+
+        $tax_query = [];
+        foreach ($taxonomies as $taxonomy => $raw) {
+            $slugs = array_values(array_filter(array_map(
+                'sanitize_title',
+                explode(',', (string) $raw)
+            )));
+
+            if (empty($slugs)) {
+                continue;
+            }
+
+            $tax_query[] = [
+                'taxonomy' => (string) $taxonomy,
+                'field'    => 'slug',
+                'terms'    => $slugs,
+                'operator' => 'IN',
+            ];
+        }
+
+        if (count($tax_query) > 1) {
+            $tax_query['relation'] = 'AND';
+        }
+
+        return $tax_query;
     }
 
     /**

@@ -9,6 +9,8 @@ function Settings({ onSaved }) {
   const [loadError, setLoadError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isFlushing, setIsFlushing] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
+  const [hasObjectCache, setHasObjectCache] = useState(true);
   const [message, setMessage] = useState(null);
 
   // Hasta que el GET tenga éxito el formulario no tiene datos con los que hacer
@@ -20,6 +22,9 @@ function Settings({ onSaved }) {
       .then((res) => {
         if (res.success) {
           setSettings(res.data);
+          if (res.runtime) {
+            setHasObjectCache(!!res.runtime.persistent_object_cache);
+          }
         } else {
           setLoadError(__("La respuesta del servidor no fue válida.", "wp-api-creator"));
         }
@@ -99,6 +104,33 @@ function Settings({ onSaved }) {
         }),
       )
       .finally(() => setIsFlushing(false));
+  };
+
+  const handlePurgeResponses = () => {
+    setIsPurging(true);
+    apiFetch({
+      path: "/creator/v1/admin/purge-response-cache",
+      method: "POST",
+    })
+      .then((res) => {
+        if (res.success)
+          setMessage({
+            type: "success",
+            text:
+              res.message ||
+              __("Caché de respuestas purgada.", "wp-api-creator"),
+          });
+      })
+      .catch(() =>
+        setMessage({
+          type: "error",
+          text: __(
+            "Error al purgar la caché de respuestas.",
+            "wp-api-creator",
+          ),
+        }),
+      )
+      .finally(() => setIsPurging(false));
   };
 
   if (isLoading) {
@@ -213,11 +245,20 @@ function Settings({ onSaved }) {
               value={settings.cache_time}
               onChange={(val) => updateField("cache_time", parseInt(val) || 0)}
               help={__(
-                "0 para desactivar. Recomendado: 300.",
+                "0 para desactivar. Solo afecta a los listados públicos: las peticiones con búsqueda, las que piden un estado distinto de publicado y la ruta de un elemento concreto nunca se cachean.",
                 "wp-api-creator",
               )}
             />
           </div>
+
+          {!hasObjectCache && settings.cache_time > 0 && (
+            <Notice status="warning" isDismissible={false} className="tw-rounded-xl">
+              {__(
+                "Este sitio no tiene un object cache persistente (Redis o Memcached). La caché solo vive dentro de cada petición, así que el tiempo configurado no ahorra trabajo entre visitas.",
+                "wp-api-creator",
+              )}
+            </Notice>
+          )}
 
           <div className="tw-flex tw-items-center tw-justify-between tw-p-4 tw-bg-foreground/5 tw-rounded-xl tw-border tw-border-border/50">
             <div className="tw-flex tw-flex-col tw-gap-1">
@@ -289,6 +330,14 @@ function Settings({ onSaved }) {
 
       {/* Accciones Extra */}
       <div className="tw-pt-4 tw-flex tw-items-center tw-justify-end tw-gap-3">
+        <button
+          onClick={handlePurgeResponses}
+          disabled={isPurging}
+          className="apig-btn apig-btn-secondary tw-text-xs"
+        >
+          <span className="dashicons dashicons-update tw-mr-1.5 tw-text-[14px]"></span>
+          {__("Purgar caché de respuestas", "wp-api-creator")}
+        </button>
         <button
           onClick={handleFlush}
           disabled={isFlushing}

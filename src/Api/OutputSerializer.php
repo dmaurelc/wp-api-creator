@@ -3,6 +3,8 @@
 namespace WpApiCreator\Api;
 
 use WpApiCreator\Permissions\Gatekeeper;
+use WpApiCreator\Schema\FieldScanner;
+use WpApiCreator\Api\CollectionArgs;
 
 /**
  * Responsable de filtrar y serializar los datos puros de WordPress (WP_Post, Metas)
@@ -13,9 +15,20 @@ class OutputSerializer
 
     protected Gatekeeper $gatekeeper;
 
-    public function __construct(?Gatekeeper $gatekeeper = null)
+    /**
+     * Proveedor de los campos disponibles de un post_type.
+     *
+     * `FieldScanner::get_available_fields()` es estatico y no puede sustituirse desde un
+     * test. Se inyecta como dependencia opcional, igual que el secreto de JwtProvider.
+     *
+     * @var callable|null
+     */
+    protected $field_provider;
+
+    public function __construct(?Gatekeeper $gatekeeper = null, ?callable $field_provider = null)
     {
         $this->gatekeeper = $gatekeeper ?? new Gatekeeper();
+        $this->field_provider = $field_provider;
     }
 
     /**
@@ -35,23 +48,28 @@ class OutputSerializer
         $allowed = $config['exposed_fields'] ?? [];
         $res = [];
 
-        // Mapeo de campos nativos permitidos
-        $native_map = [
-            'id'             => $post->ID,
-            'title'          => $post->post_title,
-            'content'        => apply_filters('the_content', $post->post_content),
-            'excerpt'        => $post->post_excerpt,
-            'slug'           => $post->post_name,
-            'status'         => $post->post_status,
-            'author'         => $post->post_author,
-            'date'           => get_post_datetime($post->ID, 'date', 'gmt')->format('c'),
-            'modified'       => get_post_datetime($post->ID, 'modified', 'gmt')->format('c'),
+        // Mapeo de campos nativos permitidos.
+        //
+        // Cada campo se resuelve solo si el endpoint lo expone. Construir el mapa entero
+        // por adelantado hacía que un endpoint configurado para devolver únicamente
+        // `title` pagase igualmente `apply_filters('the_content')` —bloques, shortcodes y
+        // oEmbed— por cada entrada de la colección.
+        $native_resolvers = [
+            'id'             => function () use ($post) { return $post->ID; },
+            'title'          => function () use ($post) { return $post->post_title; },
+            'content'        => function () use ($post) { return apply_filters('the_content', $post->post_content); },
+            'excerpt'        => function () use ($post) { return $post->post_excerpt; },
+            'slug'           => function () use ($post) { return $post->post_name; },
+            'status'         => function () use ($post) { return $post->post_status; },
+            'author'         => function () use ($post) { return $post->post_author; },
+            'date'           => function () use ($post) { return get_post_datetime($post->ID, 'date', 'gmt')->format('c'); },
+            'modified'       => function () use ($post) { return get_post_datetime($post->ID, 'modified', 'gmt')->format('c'); },
         ];
 
         // Si no hay lista blanca, permitimos ráfaga base. Si hay, filtramos.
-        foreach ($native_map as $key => $val) {
+        foreach ($native_resolvers as $key => $resolve) {
             if (empty($allowed) || in_array($key, $allowed)) {
-                $res[$key] = $val;
+                $res[$key] = $resolve();
             }
         }
 
@@ -69,10 +87,47 @@ class OutputSerializer
             }
         }
 
+        // Términos de las taxonomías seleccionadas, agrupados por taxonomía.
+        //
+        // `get_the_terms()` lee la caché de términos que WP_Query ya cebó para toda la
+        // colección (`update_post_term_cache`), a diferencia de `wp_get_object_terms()`,
+        // que consulta la base de datos una vez por post y taxonomía.
+        $taxonomies = [];
+        foreach ($allowed as $field_key) {
+            if (strpos((string) $field_key, FieldScanner::TAXONOMY_PREFIX) !== 0) {
+                continue;
+            }
+
+            $taxonomy = substr((string) $field_key, strlen(FieldScanner::TAXONOMY_PREFIX));
+
+            // Una taxonomía marcada cuando era pública sigue en `exposed_fields` si el
+            // plugin que la registra la cierra después. El editor no la ofrecería hoy;
+            // la configuración guardada no se entera sola.
+            if (!CollectionArgs::taxonomy_is_public($taxonomy)) {
+                continue;
+            }
+
+            $terms = get_the_terms($post, $taxonomy);
+
+            $taxonomies[$taxonomy] = (is_wp_error($terms) || empty($terms))
+                ? []
+                : array_values(array_map(function ($term) {
+                    return [
+                        'id'   => (int) $term->term_id,
+                        'name' => $term->name,
+                        'slug' => $term->slug,
+                    ];
+                }, $terms));
+        }
+
+        if (!empty($taxonomies)) {
+            $res['taxonomies'] = $taxonomies;
+        }
+
         // Obtener mapeo de fuentes para este post_type
         $post_type = $post->post_type;
         if (!isset(self::$field_mappings[$post_type])) {
-            $available_fields = \WpApiCreator\Schema\FieldScanner::get_available_fields($post_type);
+            $available_fields = $this->get_available_fields($post_type);
             $mapping = [];
             foreach ($available_fields as $f) {
                 $mapping[$f['key']] = $f['source'] ?? $f['group'] ?? 'other';
@@ -86,8 +141,14 @@ class OutputSerializer
 
         if (!empty($allowed)) {
             foreach ($allowed as $field_key) {
+                // Las taxonomías ya se emitieron arriba. Sin esta guarda saldrían además
+                // como `fields.taxonomy.{nombre}: ""`, porque no hay meta con ese nombre.
+                if (strpos((string) $field_key, FieldScanner::TAXONOMY_PREFIX) === 0) {
+                    continue;
+                }
+
                 // Si el campo no es nativo ni featured_media, lo tratamos como meta especializado
-                if (!isset($native_map[$field_key]) && $field_key !== 'featured_media') {
+                if (!isset($native_resolvers[$field_key]) && $field_key !== 'featured_media') {
                     if ($this->gatekeeper->can_interact_with_field($field_key, $config, 'read')) {
                         $source = $source_mapping[$field_key] ?? 'meta';
                         
@@ -116,5 +177,20 @@ class OutputSerializer
         }
 
         return $res;
+    }
+
+    /**
+     * Resuelve los campos disponibles del post_type por el proveedor inyectado o el escáner.
+     *
+     * @param string $post_type
+     * @return array
+     */
+    protected function get_available_fields(string $post_type): array
+    {
+        if ($this->field_provider !== null) {
+            return (array) call_user_func($this->field_provider, $post_type);
+        }
+
+        return FieldScanner::get_available_fields($post_type);
     }
 }

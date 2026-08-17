@@ -17,6 +17,9 @@ class ConfigMigrator
     /** Meta que versiona los tokens emitidos para un usuario. */
     const TOKEN_VERSION_META = '_wpac_token_version';
 
+    /** Versión en la que `cache_time` pasó de ser decorativo a tener efecto real. */
+    const RESPONSE_CACHE_VERSION = '1.2.0';
+
     /**
      * Ejecuta la migracion si el esquema almacenado no coincide con el del plugin.
      *
@@ -25,7 +28,9 @@ class ConfigMigrator
      */
     public static function maybe_upgrade(string $target_version): void
     {
-        if (get_option(self::VERSION_OPTION, '') === $target_version) {
+        $installed = (string) get_option(self::VERSION_OPTION, '');
+
+        if ($installed === $target_version) {
             return;
         }
 
@@ -33,7 +38,44 @@ class ConfigMigrator
         self::consolidate_api_keys();
         self::initialize_token_versions();
 
+        if ($installed === '' || version_compare($installed, self::RESPONSE_CACHE_VERSION, '<')) {
+            self::disable_response_cache();
+        }
+
         update_option(self::VERSION_OPTION, $target_version, false);
+    }
+
+    /**
+     * Deja `cache_time` en cero al llegar a la version que lo hace efectivo.
+     *
+     * El ajuste llevaba versiones guardandose sin consecuencias y el dashboard recomendaba
+     * 300 segundos. Sin esta migracion, quien siguio la recomendacion pasaria de un ajuste
+     * inerte a una cache activa en produccion en la primera peticion tras actualizar, sin
+     * haberlo pedido y sin saber que lo habia activado.
+     *
+     * Salvedad: la migracion corre en contextos de gestion (wp-admin, WP-CLI o cron), no
+     * en el path de request de la API. Si la actualizacion se aplica de forma automatica y
+     * la siguiente peticion es de la API, la cache sigue activa hasta que llegue una
+     * peticion de escritorio o se dispare el cron. La ventana suele ser de minutos, pero
+     * no es cero: mover el apagado al path de request seria peor —escribir configuracion
+     * desde ahi puede revertir cambios recien guardados.
+     *
+     * Solo corre al cruzar esa version: una actualizacion posterior no vuelve a apagar la
+     * cache de quien la haya encendido a conciencia.
+     *
+     * @return void
+     */
+    public static function disable_response_cache(): void
+    {
+        $config = get_option(ConfigBuilder::OPTION_KEY, []);
+
+        if (!is_array($config) || empty($config['settings']['cache_time'])) {
+            return;
+        }
+
+        $config['settings']['cache_time'] = 0;
+
+        ConfigBuilder::save_config($config);
     }
 
     /**

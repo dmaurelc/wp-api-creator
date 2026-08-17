@@ -5,6 +5,7 @@
 
 namespace WpApiCreator\Schema;
 
+use WpApiCreator\Api\CollectionArgs;
 use WpApiCreator\Domain\ConfigBuilder;
 
 class OpenApiBuilder
@@ -77,7 +78,7 @@ class OpenApiBuilder
                     'tags'        => [$label],
                     'summary'     => sprintf(__('Listar %s', 'wp-api-creator'), $label),
                     'description' => $endpoint['description'] ?? sprintf(__('Obtiene una lista paginada de %s.', 'wp-api-creator'), $label),
-                    'parameters'  => self::get_pagination_params(),
+                    'parameters'  => self::params_for($endpoint),
                     'responses'   => [
                         '200' => ['description' => 'Operación exitosa']
                     ]
@@ -279,17 +280,56 @@ class OpenApiBuilder
         }
     }
 
-    protected static function get_pagination_params(): array {
-        return [
-            ['name' => 'page', 'in' => 'query', 'schema' => ['type' => 'integer', 'default' => 1]],
-            ['name' => 'limit', 'in' => 'query', 'schema' => ['type' => 'integer', 'default' => 10]],
-            [
-                'name'        => 'status',
+    /**
+     * Parámetros de consulta de la ruta de colección de un endpoint.
+     *
+     * Se derivan de `CollectionArgs`, la misma lista con la que el Router registra la
+     * ruta. Antes eran una lista fija idéntica para todos los endpoints, y de ahí venía
+     * el patrón que este release corta: documentación que describe parámetros que no
+     * existen, y parámetros reales que nadie documenta.
+     *
+     * @param array $config Configuración del endpoint.
+     * @return array Lista de objetos `parameter` de OpenAPI.
+     */
+    public static function params_for(array $config): array
+    {
+        $parameters = [];
+
+        foreach (CollectionArgs::for_endpoint($config) as $name => $spec) {
+            $parameters[] = [
+                'name'        => $name,
                 'in'          => 'query',
-                'schema'      => ['type' => 'string', 'enum' => \WpApiCreator\Domain\Repositories\DynamicQueryBuilder::ALLOWED_STATUSES, 'default' => 'publish'],
-                'description' => __('Estado de las entradas. Los estados no públicos exigen capacidades sobre el tipo de contenido.', 'wp-api-creator')
-            ]
-        ];
+                'schema'      => self::to_openapi_schema($spec),
+                'description' => (string) ($spec['description'] ?? ''),
+            ];
+        }
+
+        return $parameters;
+    }
+
+    /**
+     * Traduce una especificación de argumento de WP REST a un `schema` de OpenAPI.
+     *
+     * Los argumentos de WordPress mezclan validación y saneado —`sanitize_callback` es un
+     * callable— mientras que OpenAPI solo describe la forma del dato. La traducción se
+     * queda con lo que ambos formatos comparten.
+     *
+     * @param array $spec
+     * @return array
+     */
+    protected static function to_openapi_schema(array $spec): array
+    {
+        $schema = ['type' => (string) ($spec['type'] ?? 'string')];
+
+        if (array_key_exists('default', $spec)) {
+            $schema['default'] = $spec['default'];
+        }
+
+        if (!empty($spec['enum']) && is_array($spec['enum'])) {
+            $schema['enum'] = array_values($spec['enum']);
+        }
+
+        return $schema;
     }
 
     public static function get_cached_schema(): array {
